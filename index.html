@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polaris — turn your work into a song</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Edu+NSW+ACT+Cursive:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Decorative only: the galaxy this whole thing lives in. -->
+  <div class="space" aria-hidden="true">
+    <div class="starfield"></div>
+    <div class="starfield near"></div>
+    <div class="nebula"></div>
+    <div class="rays"></div>
+    <div class="planet"></div>
+    <div class="orb o1"></div>
+    <div class="orb o2"></div>
+    <div class="comet c1"></div>
+    <div class="comet c2"></div>
+    <div class="comet c3"></div>
+    <div class="horizon horizon-back"></div>
+    <div class="horizon horizon-front"></div>
+    <div class="ribbon ribbon-l"></div>
+    <div class="ribbon ribbon-l2"></div>
+    <div class="ribbon ribbon-r"></div>
+    <div class="ribbon ribbon-r2"></div>
+    <div class="drift">
+      <span class="mote m1"></span><span class="mote m2"></span><span class="mote m3"></span>
+      <span class="mote m4"></span><span class="mote m5"></span><span class="mote m6"></span>
+      <span class="mote m7"></span><span class="mote m8"></span>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="star">✦</span>
+      <span>Polaris</span>
+    </div>
+    <div class="goal-field">
+      <label for="goalName">Goal</label>
+      <input id="goalName" type="text" placeholder="Build a robot" oninput="setGoalName(this.value)" />
+    </div>
+    <div class="day-field">
+      <label for="dateInput">Date</label>
+      <input id="dateInput" type="date" oninput="setCurrentDate(this.value)" />
+      <button class="ghost" onclick="goToToday()">Today</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ── Subtasks ─────────────────────────────────────────── -->
+    <section class="card" id="subtasksCard">
+      <h2>Subtasks</h2>
+      <p class="hint">Split the goal up front. You can add or delete subtasks at any point.</p>
+
+      <div class="add-row">
+        <div class="add-field">
+          <label class="mini-label" for="subtaskName">Subtask name</label>
+          <input id="subtaskName" type="text" placeholder="e.g. CAD the robot" />
+        </div>
+        <button class="primary" onclick="uiAddSubtask()">Add subtask</button>
+      </div>
+
+      <ul id="subtaskList" class="subtask-list"></ul>
+      <div id="subtaskEmpty" class="empty">No subtasks yet — add the first one above.</div>
+    </section>
+
+    <!-- ── Daily check-in ───────────────────────────────────── -->
+    <section class="card" id="checkinCard">
+      <h2>Today's check-in</h2>
+      <p class="hint">Log one subtask at a time. Two logs on the same day become a chord.</p>
+
+      <label class="field-label" for="logTask">Subtask</label>
+      <select id="logTask" class="select"></select>
+
+      <label class="field-label">Today's effort level</label>
+      <div class="btn-grid" id="effortGrid">
+        <button class="chip" data-effort="barely"   onclick="setEffort('barely', 0.5)">Barely did anything <span class="chip-h">0.5h</span></button>
+        <button class="chip" data-effort="a_little" onclick="setEffort('a_little', 1)">Touched on it a little <span class="chip-h">1h</span></button>
+        <button class="chip" data-effort="a_while"  onclick="setEffort('a_while', 2.5)">Worked on it for a while <span class="chip-h">2.5h</span></button>
+        <button class="chip" data-effort="immersed" onclick="setEffort('immersed', 4)">Fully immersed <span class="chip-h">4h</span></button>
+        <button class="chip other" data-effort="other" onclick="setEffort('other')">Other</button>
+      </div>
+
+      <!-- Only "Other" needs this: the four levels bring their own hours. -->
+      <div id="hoursRow" class="hours-row" hidden>
+        <label class="field-label" for="hoursInput">Hours</label>
+        <input id="hoursInput" class="hours" type="number" min="0" step="0.25" value="" placeholder="hours" />
+      </div>
+
+      <label class="field-label">Today's mood for the project</label>
+      <!-- Faces are drawn in script.js (renderMoodGrid) — see MOOD_FEATURES. -->
+      <div class="btn-grid moods" id="moodGrid"></div>
+
+      <button class="primary wide" onclick="submitDailyLog()">Submit today's log</button>
+      <div id="checkinMsg" class="msg"></div>
+    </section>
+
+    <!-- ── Timeline ─────────────────────────────────────────── -->
+    <section class="card" id="timelineCard">
+      <h2>Day timeline</h2>
+      <p class="hint">One entry = a single note. Two or more on a day = a chord.</p>
+      <div id="timeline" class="timeline"></div>
+      <div id="timelineEmpty" class="empty">Nothing logged yet.</div>
+    </section>
+
+    <!-- ── Song ─────────────────────────────────────────────── -->
+    <section class="card" id="songCard">
+      <h2>The song</h2>
+      <p class="hint" id="songState">Log a day to start writing the song.</p>
+
+      <div class="play-row">
+        <button id="playBtn" class="primary" onclick="playSong()">▶ Play song</button>
+        <button class="ghost" onclick="stopSong()">■ Stop</button>
+      </div>
+
+      <pre id="lyrics" class="lyrics"></pre>
+    </section>
+
+    <!-- ── The sheet ────────────────────────────────────────── -->
+    <section class="card idle" id="sheetCard">
+      <h2>The sheet</h2>
+      <p class="hint">
+        Every subtask that got worked on is written out as its own movement,
+        in its own key. The files are named after this project, so a new goal
+        writes a new set of sheets.
+      </p>
+
+      <div id="sheetMeta" class="sheet-meta"></div>
+      <div id="movementStrip" class="movement-strip"></div>
+
+      <div id="sheetPaper" class="sheet-paper"></div>
+      <div id="sheetEmpty" class="empty">Nothing engraved yet — log a day and the staff fills in.</div>
+
+      <div class="sheet-actions" id="sheetActions">
+        <button class="primary" onclick="downloadSheet('musicxml')">⤓ MusicXML — for MuseScore</button>
+        <button class="ghost" onclick="downloadSheet('midi')">⤓ MIDI</button>
+        <button class="ghost" onclick="downloadSheet('svg')">⤓ Engraved sheet (SVG)</button>
+        <button class="ghost" onclick="downloadSheet('lyrics')">⤓ Lyrics</button>
+      </div>
+      <div id="sheetMsg" class="msg"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <button class="ghost small" onclick="loadDemo()">Load demo goal</button>
+    <button class="ghost small danger" onclick="resetAll()">Reset everything</button>
+  </footer>
+
+  <!-- ── The reward ─────────────────────────────────────────────
+       Fires when a movement closes. Everything inside is written by
+       celebrate() in script.js. -->
+  <div class="reward-overlay" id="rewardOverlay" hidden>
+    <div class="reward-rays" aria-hidden="true"></div>
+    <div class="reward-burst" id="rewardBurst" aria-hidden="true"></div>
+
+    <div class="reward-card" id="rewardCard" role="dialog" aria-modal="true"
+         aria-labelledby="rewardTitle">
+      <div class="reward-sheen" aria-hidden="true"></div>
+
+      <div class="reward-ribbon" id="rewardKicker">MOVEMENT COMPLETE</div>
+      <div class="reward-rarity" id="rewardRarity">Rare</div>
+
+      <div class="reward-token" aria-hidden="true">
+        <span class="rw-ring"></span>
+        <span class="rw-ring rw-ring-2"></span>
+        <span class="rw-gem"></span>
+        <span class="rw-glyph" id="rewardGlyph">♫</span>
+      </div>
+
+      <h3 id="rewardTitle">C Ionian</h3>
+      <p class="reward-sub" id="rewardSub"></p>
+
+      <dl class="reward-stats" id="rewardStats"></dl>
+
+      <p class="reward-flavor" id="rewardFlavor"></p>
+      <p class="reward-turned" id="rewardTurned" hidden></p>
+      <p class="reward-finale" id="rewardFinale" hidden></p>
+
+      <div class="reward-actions">
+        <button class="primary" id="rewardClaim" onclick="closeReward()">Claim</button>
+        <button class="ghost" onclick="replayRewardChime()">↻ Hear it again</button>
+        <button class="ghost" onclick="downloadSheet('musicxml')">⤓ Sheet</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

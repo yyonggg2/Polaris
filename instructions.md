@@ -9,8 +9,8 @@ They can add or delete these subtasks during the process as well. (buttons for a
 Daily routine:
 At the end of each day, respond to these two buttons:
 1. Today’s effort level:
-    1. [ Barely did anything ]  [ Touched on it a little ]  [ Worked on it for a while ]  [ Fully immersed ]
-ps(Each option comes with a default number of hours attached to it, but the user can also manually adjust the number if they want to be more precise. )
+    1. [ Barely did anything (0.5h) ]  [ Touched on it a little (1h) ]  [ Worked on it for a while (2.5h) ]  [ Fully immersed (4h) ]  [ Other ]
+ps(The first four options log the number of hours shown in their brackets, with no field to fill in. "Other" is there for when the user wants to be more precise: picking it reveals an hours field, and the number they type in is what gets logged.)
 1. Today’s mood for the project:
     1. 😞  😐  🙂  😄
 
@@ -28,7 +28,7 @@ Once everything is finished, all the pieces get stitched together into one full 
 Tech Stack:
 1. UI and frontend:
     1. Add/Delete subtask buttons and input fields (name + estimated hours)
-    2. Daily check-in screen: 4 effort-level buttons (each pre-fills an editable hours field) and 4 mood buttons (emoji)
+    2. Daily check-in screen: 4 effort-level buttons (each logging its bracketed default hours) plus an "Other" button that reveals an hours field for a typed-in number, and 4 mood buttons (emoji)
     3. Submit button for the daily log
     4. Complete / Give Up buttons for the current subtask
     5. Display current subtask list and progress
@@ -41,7 +41,7 @@ Tech Stack:
     2. Delete a subtask
     3. Mark a subtask as completed (manual action, not automatic)
     4. Mark a subtask as given up (data is kept, not deleted)
-    5. Log a daily entry for a subtask: effort level, hours (default from effort level, editable by user), and mood
+    5. Log a daily entry for a subtask: effort level, hours (from the effort level, or typed in by the user when they pick "Other"), and mood
     6. Group same-day entries across subtasks together, so Music knows when to play a chord instead of a single note
     7. Provide the full, ordered data for the whole goal once everything is finished, so Music can generate the complete song 
 
