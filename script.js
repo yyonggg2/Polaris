@@ -1,27 +1,20 @@
 /* ══════════════════════════════════════════════════════════════
    Polaris — every goal becomes a song.
 
-   Four layers, kept apart on purpose:
+   Three layers, kept apart on purpose:
      LOGIC  — owns the data. Knows nothing about sound or the DOM.
-     MUSIC  — turns Logic's data into a real score: keys, modes,
-              rhythm, cadences. Plays it.
-     SHEET  — the same score engraved, and written out as MusicXML,
-              MIDI and SVG you can download.
-     UI     — buttons, rendering, and the reward that fires when a
-              movement closes.
+     MUSIC  — takes Logic's data, makes a song. Exposes playSong().
+     UI     — buttons and rendering. Calls Logic, then playSong().
    ══════════════════════════════════════════════════════════════ */
 
 
 /* ══ LOGIC ═════════════════════════════════════════════════════ */
 
-/* The four levels and the hours each one pre-fills. 'other' is a level too,
-   but it carries no default — the user types the number themselves. */
 const EFFORT_HOURS = {
   barely:   0.5,
   a_little: 1,
   a_while:  2.5,
   immersed: 4,
-  other:    null,
 };
 
 const EFFORT_LABEL = {
@@ -29,20 +22,7 @@ const EFFORT_LABEL = {
   a_little: 'Touched on it a little',
   a_while:  'Worked on it for a while',
   immersed: 'Fully immersed',
-  other:    'Other',
 };
-
-/* An 'other' day has hours but no level, and the music and the rarity both
-   want a level. Read one back off the clock, using the four defaults as the
-   midpoints of their bands. */
-function effortBand(log) {
-  if (log.effort !== 'other') return log.effort;
-  const h = log.hours;
-  if (h < 0.75) return 'barely';
-  if (h < 1.75) return 'a_little';
-  if (h < 3.25) return 'a_while';
-  return 'immersed';
-}
 
 /* Moods are drawn, not typed: each one is a bubble lifted out of the
    scene with a face in it, tinted along the reef palette — rose down
@@ -189,9 +169,8 @@ function reopenSubtask(taskId) {
 /**
  * Log a day against a subtask.
  * date:   ISO 'YYYY-MM-DD' (defaults to today)
- * effort: 'barely' | 'a_little' | 'a_while' | 'immersed' | 'other'
- * hours:  defaults to the effort level's hours, but the user can override —
- *         'other' has no default, so the hours come from the user
+ * effort: 'barely' | 'a_little' | 'a_while' | 'immersed'
+ * hours:  defaults to the effort level's hours, but the user can override
  * mood:   1–4
  */
 function addDailyLog(taskId, date, effort, hours, mood) {
@@ -199,13 +178,12 @@ function addDailyLog(taskId, date, effort, hours, mood) {
   if (!task) return false;
 
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayISO();
-  const level = effort in EFFORT_HOURS ? effort : 'a_little';
-  const blank = hours === undefined || hours === null || hours === '';
   const entry = {
     date: iso,
-    effort: level,
-    // 'other' has no default to fall back on, so a blank one is simply zero.
-    hours: blank ? (EFFORT_HOURS[level] || 0) : Math.max(0, Number(hours)),
+    effort: EFFORT_HOURS[effort] !== undefined ? effort : 'a_little',
+    hours: hours === undefined || hours === null || hours === ''
+      ? EFFORT_HOURS[effort]
+      : Math.max(0, Number(hours)),
     mood: Math.min(4, Math.max(1, Math.round(Number(mood) || 3))),
   };
 
@@ -351,121 +329,56 @@ function migrate(data) {
 
 /* ══ MUSIC ═════════════════════════════════════════════════════ */
 
-/*  How the work becomes a piece of music.
+/*  How the data becomes sound:
+      effort  → note length + how many notes fire that day (density)
+      mood    → pitch height, and major vs minor for the whole song
+      1 entry on a day → single note ·  2+ entries → chord
+      completed subtask → V–I cadence, it lands home
+      given up subtask  → suspended chord left hanging, no resolution   */
 
-    A goal is a suite. Every subtask that got worked on is one movement,
-    and each movement is written in its own key and its own church mode,
-    picked from how those particular days actually felt:
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+const MINOR = [0, 2, 3, 5, 7, 8, 10];
 
-      mood   → which mode the movement lives in (Lydian ↔ Phrygian),
-               and how high the melody sits inside it
-      effort → the rhythm of the day: how many notes, and how long
-      1 entry on a day  → a single note
-      2+ entries on a day → a chord, built in thirds out of that mode
-
-    Endings are real cadences, not just "a nice chord":
-      completed → authentic, V–I. The leading tone is raised even in the
-                  minor modes so the dominant actually pulls, and a minor
-                  movement lands on a Picardy third. You hear it arrive.
-      given up  → deceptive, V–vi. Everything sets up the tonic and then
-                  the floor moves. It's left ringing, unresolved — but it
-                  is still a sound, which is the whole point.
-      still open→ half cadence. The movement stops on the dominant, which
-                  is a question, not a full stop.
-
-    Which family a movement lands in is not left entirely to the data.
-    Mood picks the *shade* — how dark or bright inside a family — but the
-    *family* is on a rota: every third movement is a shadow movement, even
-    when those particular days were fine. A suite that stays bright the
-    whole way through has nowhere to fall and nothing to come back from,
-    so about a third of the work is written minor on purpose.
-
-    The data still outranks the pattern in one direction: a movement whose
-    days were genuinely bad goes to shadow wherever it sits in the rota.
-    Nothing gets written cheerful just because it was its turn.            */
-
-/* Church modes, darkest to brightest. `offset` is how many positions the
-   mode sits from Ionian on the circle of fifths, which is exactly what
-   the key signature needs. */
-const MODES = {
-  phrygian:   { steps: [0, 1, 3, 5, 7, 8, 10], offset: -4, name: 'Phrygian',   feel: 'dread',           family: 'shadow' },
-  aeolian:    { steps: [0, 2, 3, 5, 7, 8, 10], offset: -3, name: 'Aeolian',    feel: 'plain sorrow',    family: 'shadow' },
-  dorian:     { steps: [0, 2, 3, 5, 7, 9, 10], offset: -2, name: 'Dorian',     feel: 'a hopeful ache',  family: 'shadow' },
-  mixolydian: { steps: [0, 2, 4, 5, 7, 9, 10], offset: -1, name: 'Mixolydian', feel: 'warm, unhurried', family: 'bright' },
-  ionian:     { steps: [0, 2, 4, 5, 7, 9, 11], offset:  0, name: 'Ionian',     feel: 'clear daylight',  family: 'bright' },
-  lydian:     { steps: [0, 2, 4, 6, 7, 9, 11], offset:  1, name: 'Lydian',     feel: 'weightless',      family: 'bright' },
+const EFFORT_SHAPE = {
+  barely:   { dur: 0.30, density: 1, gain: 0.10 },
+  a_little: { dur: 0.45, density: 1, gain: 0.14 },
+  a_while:  { dur: 0.65, density: 2, gain: 0.18 },
+  immersed: { dur: 0.90, density: 3, gain: 0.22 },
 };
 
-const MODE_ORDER = ['phrygian', 'aeolian', 'dorian', 'mixolydian', 'ionian', 'lydian'];
+const MOOD_DEGREE = { 1: 0, 2: 2, 3: 4, 4: 6 };
 
-/* Two ladders of three, darkest rung first. Mood picks the rung; the
-   rota picks which ladder you climb. */
-const SHADOW_LADDER = ['phrygian', 'aeolian', 'dorian'];
-const BRIGHT_LADDER = ['mixolydian', 'ionian', 'lydian'];
-
-/* The suite walks these tonics in order, so no two neighbouring movements
-   sit in the same key. Their own position on the circle of fifths is
-   stored here — mode offset gets added to it to get the key signature. */
-const TONICS = [
-  { pc: 0,  fifths:  0, name: 'C'  },
-  { pc: 7,  fifths:  1, name: 'G'  },
-  { pc: 5,  fifths: -1, name: 'F'  },
-  { pc: 2,  fifths:  2, name: 'D'  },
-  { pc: 10, fifths: -2, name: 'B♭' },
-  { pc: 9,  fifths:  3, name: 'A'  },
-  { pc: 3,  fifths: -3, name: 'E♭' },
-];
-
-/* Effort becomes rhythm. `notes` are note lengths in beats; `bar` is how
-   much of the bar the whole day takes up, so 'barely' leaves a hesitation
-   of rest after its one short note and 'immersed' fills a whole measure. */
-const EFFORT_RHYTHM = {
-  barely:   { notes: [0.5],                bar: 1, vel: 0.36 },
-  a_little: { notes: [1],                  bar: 1, vel: 0.50 },
-  a_while:  { notes: [0.5, 1.5],           bar: 2, vel: 0.66 },
-  immersed: { notes: [0.5, 0.5, 1, 2],     bar: 4, vel: 0.82 },
-};
-
-/* Mood picks where in the mode the day sits. Good days sit high. */
-const MOOD_DEGREE = { 1: 0, 2: 2, 3: 4, 4: 7 };
-
-/* And which chord a shared day builds, when two subtasks land together:
-   i, vi, iv, V — the four chords most of western music runs on. */
-const MOOD_CHORD_ROOT = { 1: 0, 2: 5, 3: 3, 4: 4 };
-
-const BEATS_PER_MEASURE = 4;
-const ROOT_MIDI = 60;   // middle C — the tonic of the first movement
+const ROOT_MIDI = 60;   // middle C
 
 let audioCtx = null;
-let master = null;
+let masterGain = null;
 let activeNodes = [];
-let currentScore = null;   // rebuilt on every render; downloads read it
 
 /**
  * The one function the UI needs. Takes Logic's data (or fetches it),
- * builds the whole score, and plays it.
+ * builds the whole song, and plays it.
  */
 function playSong(goalData) {
-  const score = composeScore(goalData || getFullGoalData());
+  const data = goalData || getFullGoalData();
+  const score = composeSong(data);
 
-  if (!score.melody.length) {
+  if (!score.events.length) {
     uiSongMessage('Nothing to play yet — log a day first.', true);
     return null;
   }
 
   stopSong();
-  playScore(score);
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
 
-  const bright = score.movements.filter((m) => m.family === 'bright').length;
-  const shadow = score.movements.length - bright;
+  const start = ctx.currentTime + 0.12;
+  score.events.forEach((ev) => scheduleEvent(ctx, ev, start));
 
   uiSongMessage(
-    `Playing ${score.isFull ? 'the full suite' : 'the suite so far'} — ` +
-    `${score.movements.length} movement${score.movements.length === 1 ? '' : 's'}, ` +
-    `${bright} bright / ${shadow} shadow, ` +
-    `${score.dayCount} day${score.dayCount === 1 ? '' : 's'}, ` +
+    `Playing ${score.isFull ? 'the full song' : 'the song so far'} — ` +
+    `${score.mode}, ${score.dayCount} day${score.dayCount === 1 ? '' : 's'}, ` +
     `${score.chordDays} chord day${score.chordDays === 1 ? '' : 's'}, ` +
-    `♩=${score.tempo}, ${score.duration.toFixed(1)}s.`
+    `${score.duration.toFixed(1)}s.`
   );
 
   return score;
@@ -479,287 +392,153 @@ function stopSong() {
   activeNodes = [];
 }
 
-/* ── Choosing a key ────────────────────────────────────────── */
-
-/** Average mood over a set of logs; 2.5 (dead centre) when there are none. */
-function averageMood(logs) {
-  if (!logs.length) return 2.5;
-  return logs.reduce((s, l) => s + l.mood, 0) / logs.length;
-}
-
 /**
- * Some tonic + mode pairs need more than seven sharps or flats to write
- * down. Rather than invent double accidentals, step the mode one shade
- * brighter until the key signature is notatable.
+ * Build the score without playing it: one segment per subtask, in order,
+ * each ending in its own cadence, stitched into a single timeline.
  */
-function fitMode(tonic, key) {
-  let i = MODE_ORDER.indexOf(key);
-  while (i < MODE_ORDER.length - 1 &&
-         Math.abs(tonic.fifths + MODES[MODE_ORDER[i]].offset) > 7) i++;
-  return MODE_ORDER[i];
-}
+function composeSong(goalData) {
+  const events = [];
+  const allLogs = goalData.subtasks.flatMap((t) => t.dailyLogs);
 
-/**
- * The key of one movement. `index` is its position in the suite, which
- * decides both the tonic and whether the every-third-movement shadow
- * rule applies.
- */
-function movementKey(task, index) {
-  const avg = averageMood(task.dailyLogs);
+  if (!allLogs.length) {
+    return { events, duration: 0, mode: 'major', dayCount: 0, chordDays: 0, isFull: false };
+  }
 
-  // Mood picks the rung: 0 is the darkest shade of whichever family the
-  // movement lands in, 2 the brightest.
-  let rung = avg < 2.2 ? 0 : avg < 3.2 ? 1 : 2;
+  // The overall mood of the goal decides the key the whole song lives in.
+  const avgMood = allLogs.reduce((s, l) => s + l.mood, 0) / allLogs.length;
+  const scale = avgMood >= 2.5 ? MAJOR : MINOR;
+  const mode = avgMood >= 2.5 ? 'major' : 'minor';
 
-  // Walking away from something darkens it by one rung.
-  if (task.status === 'given_up') rung = Math.max(0, rung - 1);
-
-  // The rota: every third movement is written in shadow whatever the days
-  // were like. And genuinely bad days go to shadow wherever they sit —
-  // the pattern can darken a movement, but it can never brighten one.
-  const rota = index % 3 === 2;
-  const grim = avg < 1.8;
-  const shadow = rota || grim;
-
-  const tonic = TONICS[index % TONICS.length];
-  const key = fitMode(tonic, (shadow ? SHADOW_LADDER : BRIGHT_LADDER)[rung]);
-
-  // Worth saying out loud in the UI: this one is minor because it was its
-  // turn, not because the work went badly.
-  const turned = rota && !grim;
-
-  return {
-    key,
-    mode: MODES[key],
-    tonic,
-    fifths: tonic.fifths + MODES[key].offset,
-    family: MODES[key].family,
-    avgMood: avg,
-    turned,
-  };
-}
-
-/* ── Composing ─────────────────────────────────────────────── */
-
-/**
- * Build the whole suite as data — no sound, no DOM. Everything downstream
- * (playback, engraving, MusicXML, MIDI) reads this one object.
- *
- * Times are in beats, not seconds, so the same numbers can be turned into
- * either a schedule or a set of note values.
- */
-function composeScore(goalData) {
-  const data = goalData || getFullGoalData();
-  const melody = [];
-  const bass = [];
-  const movements = [];
-
-  const allLogs = data.subtasks.flatMap((t) => t.dailyLogs);
-  const avgAll = averageMood(allLogs);
-  const tempo = Math.round(64 + (avgAll - 1) * 13);   // 64 … 103 bpm
-
-  // Which dates carry more than one subtask → chords.
+  // Which dates had more than one subtask logged → chords.
   const dayCounts = {};
   allLogs.forEach((l) => { dayCounts[l.date] = (dayCounts[l.date] || 0) + 1; });
-  const chordDays = new Set();
 
-  let beat = 0;
-  let index = 0;
+  let t = 0;
+  const chordDaySet = new Set();
 
-  data.subtasks.forEach((task) => {
-    if (!task.dailyLogs.length) return;   // nothing logged, nothing to write
+  goalData.subtasks.forEach((task) => {
+    if (!task.dailyLogs.length && task.status === 'active') return;
 
-    const k = movementKey(task, index);
-    const steps = k.mode.steps;
-    const root = ROOT_MIDI + k.tonic.pc;
-    const bassRoot = root - 24;
-    const falling = k.family === 'shadow';   // sad days walk down, good days climb
-    const start = beat;
-    const firstNote = melody.length;
+    const segStart = t;
 
-    task.dailyLogs.forEach((log, d) => {
-      const r = EFFORT_RHYTHM[effortBand(log)] || EFFORT_RHYTHM.a_little;
+    task.dailyLogs.forEach((log, i) => {
+      const shape = EFFORT_SHAPE[log.effort] || EFFORT_SHAPE.a_little;
       const isChord = dayCounts[log.date] > 1;
-      if (isChord) chordDays.add(log.date);
+      if (isChord) chordDaySet.add(log.date);
 
-      let at = beat;
-      r.notes.forEach((dur, n) => {
-        // The run inside a day steps away from the mood's home degree —
-        // upward in a bright mode, downward in a shadow one.
-        const drift = falling ? -n : n;
-        const deg = clamp(MOOD_DEGREE[log.mood] + drift + (d % 2), -2, 9);
+      const rootMidi = ROOT_MIDI + degreeToSemitone(scale, MOOD_DEGREE[log.mood] + (i % 3));
+      const midis = isChord
+        ? [rootMidi, rootMidi + degreeSpan(scale, 2), rootMidi + degreeSpan(scale, 4)]
+        : [rootMidi];
 
-        const midis = isChord
-          ? [0, 2, 4].map((x) =>
-              root + degreeToSemitone(steps, MOOD_CHORD_ROOT[log.mood] + x))
-          : [root + degreeToSemitone(steps, deg)];
+      // Effort density: the harder the day, the more notes it fires.
+      const step = shape.dur / shape.density;
+      for (let d = 0; d < shape.density; d++) {
+        events.push({
+          time: t + d * step,
+          midis: midis.map((m) => (d > 0 ? m + 12 * (d % 2) : m)),
+          dur: step * 0.9,
+          gain: shape.gain * (d === 0 ? 1 : 0.62),
+          wave: 'triangle',
+        });
+      }
 
-        melody.push({ beat: at, beats: dur, midis, vel: r.vel, date: log.date });
-        at += dur;
-      });
-
-      beat += r.bar;
+      t += shape.dur + 0.14;
     });
 
-    // Movements start and end on barlines, so the suite reads cleanly.
-    beat = Math.ceil(beat / BEATS_PER_MEASURE) * BEATS_PER_MEASURE;
-
-    // A slow pedal underneath, alternating tonic and fifth — the ground
-    // the movement is standing on.
-    for (let m = start; m < beat; m += BEATS_PER_MEASURE) {
-      const odd = ((m - start) / BEATS_PER_MEASURE) % 2;
-      bass.push({
-        beat: m,
-        beats: BEATS_PER_MEASURE,
-        midis: [bassRoot + (odd ? degreeToSemitone(steps, 4) : 0)],
+    // A quiet root drone under the whole segment holds it together.
+    if (t > segStart) {
+      events.push({
+        time: segStart,
+        midis: [ROOT_MIDI - 24],
+        dur: t - segStart + 0.5,
+        gain: 0.07,
+        wave: 'sine',
       });
     }
 
-    beat += appendCadence(melody, bass, beat, k, root, bassRoot, task.status);
-
-    // Words are hung under the first notes of the movement, so the sheet
-    // you download reads as a song and not just as pitches.
-    const band = k.avgMood >= 3.5 ? 'high' : k.avgMood >= 2.5 ? 'mid'
-               : k.avgMood >= 1.5 ? 'low' : 'dark';
-    const phrase = pick(VERSE[band], index).replace(/[.,]/g, '').split(/\s+/);
-    phrase.forEach((word, i) => {
-      const note = melody[firstNote + i];
-      if (note) note.lyric = word;
-    });
-
-    movements.push({
-      taskId: task.taskId,
-      taskName: task.taskName,
-      status: task.status,
-      key: k.key,
-      modeName: k.mode.name,
-      feel: k.mode.feel,
-      family: k.family,
-      turned: k.turned,
-      tonicName: k.tonic.name,
-      fifths: k.fifths,
-      startBeat: start,
-      endBeat: beat,
-      noteCount: melody.length - firstNote,
-      days: task.dailyLogs.length,
-      hours: task.dailyLogs.reduce((s, l) => s + l.hours, 0),
-      avgMood: k.avgMood,
-      cadence: CADENCE_NAME[task.status] || 'open',
-      phrase: phrase.join(' '),
-    });
-
-    index++;
+    t += appendCadence(events, t, scale, task.status);
   });
 
-  const dates = [...new Set(allLogs.map((l) => l.date))].sort((a, b) => a.localeCompare(b));
+  const duration = events.reduce((max, e) => Math.max(max, e.time + e.dur), 0);
+  const isFull = goalData.subtasks.length > 0 &&
+    goalData.subtasks.every((s) => s.status !== 'active');
 
   return {
-    title: data.goalName || 'Untitled goal',
-    subtitle: dates.length
-      ? `${formatDay(dates[0])} — ${formatDay(dates[dates.length - 1])}`
-      : '',
-    tempo,
-    melody,
-    bass,
-    movements,
-    totalBeats: beat,
-    measureCount: Math.max(1, Math.ceil(beat / BEATS_PER_MEASURE)),
-    duration: beat * (60 / tempo),
-    dayCount: dates.length,
-    chordDays: chordDays.size,
-    dates,
-    isFull: data.subtasks.length > 0 && data.subtasks.every((s) => s.status !== 'active'),
+    events,
+    duration,
+    mode,
+    dayCount: new Set(allLogs.map((l) => l.date)).size,
+    chordDays: chordDaySet.size,
+    isFull,
   };
 }
 
-const CADENCE_NAME = {
-  completed: 'authentic (V–I)',
-  given_up:  'deceptive (V–vi)',
-  active:    'half (…–V)',
-};
-
 /**
- * The two measures that close a movement. Returns how many beats it used.
- *
- * The dominant gets a raised third in the shadow modes — that's the
- * leading tone, and without it a minor V has no pull at all. Completed
- * minor movements then land on a Picardy third: the last chord turns
- * major. It's an old trick and it still works.
+ * End of a subtask.
+ *   completed → V then I. It resolves; you hear it land.
+ *   given up  → a sus4 with a rubbed second, left hanging. No resolution,
+ *               but still a sound — giving up leaves a trace.
+ *   active    → a short breath, the segment isn't over yet.
+ * Returns how much time the cadence consumed.
  */
-function appendCadence(melody, bass, t, k, root, bassRoot, status) {
-  const steps = k.mode.steps;
-  const shadow = k.family === 'shadow';
-  const at = (deg, lift) => root + degreeToSemitone(steps, deg) + (lift || 0);
-
-  // V, with a real leading tone whatever the mode.
-  const dominant = [at(4), at(6, shadow ? 1 : 0), at(8)];
-
+function appendCadence(events, t, scale, status) {
   if (status === 'completed') {
-    const tonic = [at(0), at(2, shadow ? 1 : 0), at(4)];   // Picardy third in the shadow modes
-    melody.push({ beat: t,     beats: 4, midis: dominant, vel: 0.62 });
-    melody.push({ beat: t + 4, beats: 4, midis: tonic,    vel: 0.78 });
-    bass.push({ beat: t,     beats: 4, midis: [bassRoot + degreeToSemitone(steps, 4)] });
-    bass.push({ beat: t + 4, beats: 4, midis: [bassRoot] });
-    return 8;
+    const dominant = [4, 6, 8].map((d) => ROOT_MIDI + degreeToSemitone(scale, d));
+    const tonic    = [0, 2, 4].map((d) => ROOT_MIDI + degreeToSemitone(scale, d));
+
+    events.push({ time: t,        midis: dominant, dur: 0.55, gain: 0.16, wave: 'triangle' });
+    events.push({ time: t + 0.60, midis: tonic,    dur: 1.20, gain: 0.19, wave: 'triangle' });
+    events.push({ time: t + 0.60, midis: [ROOT_MIDI - 12], dur: 1.30, gain: 0.10, wave: 'sine' });
+    return 2.1;
   }
 
   if (status === 'given_up') {
-    // Deceptive: everything points at the tonic, and then vi arrives
-    // instead. Nothing is wrong with the chord — it just isn't home.
-    const submediant = [at(5), at(7), at(9)];
-    melody.push({ beat: t,     beats: 4, midis: dominant,   vel: 0.60 });
-    melody.push({ beat: t + 4, beats: 4, midis: submediant, vel: 0.52 });
-    bass.push({ beat: t,     beats: 4, midis: [bassRoot + degreeToSemitone(steps, 4)] });
-    bass.push({ beat: t + 4, beats: 4, midis: [bassRoot + degreeToSemitone(steps, 5)] });
-    return 8;
+    const sus = [
+      ROOT_MIDI + degreeToSemitone(scale, 0),
+      ROOT_MIDI + degreeToSemitone(scale, 3),   // the 4th, never falling to the 3rd
+      ROOT_MIDI + degreeToSemitone(scale, 4),
+      ROOT_MIDI + degreeToSemitone(scale, 1) + 12,
+    ];
+    events.push({ time: t, midis: sus, dur: 1.60, gain: 0.15, wave: 'triangle' });
+    return 2.0;
   }
 
-  // Half cadence — the movement stops on the dominant. A question mark.
-  const predominant = [at(1), at(3), at(5)];
-  melody.push({ beat: t,     beats: 4, midis: predominant, vel: 0.48 });
-  melody.push({ beat: t + 4, beats: 4, midis: dominant,    vel: 0.56 });
-  bass.push({ beat: t,     beats: 4, midis: [bassRoot + degreeToSemitone(steps, 1)] });
-  bass.push({ beat: t + 4, beats: 4, midis: [bassRoot + degreeToSemitone(steps, 4)] });
-  return 8;
-}
-
-/** Scale degree → semitones, wrapping into higher octaves past the 7th. */
-function degreeToSemitone(scale, degree) {
-  const octave = Math.floor(degree / scale.length);
-  const idx = ((degree % scale.length) + scale.length) % scale.length;
-  return scale[idx] + 12 * octave;
-}
-
-function clamp(n, lo, hi) {
-  return Math.min(hi, Math.max(lo, n));
+  events.push({
+    time: t,
+    midis: [ROOT_MIDI + degreeToSemitone(scale, 4)],
+    dur: 0.5,
+    gain: 0.09,
+    wave: 'triangle',
+  });
+  return 1.0;
 }
 
 /* ── Lyrics ────────────────────────────────────────────────── */
 
 /**
- * Lyrics follow the mood trend and the length of the goal: more days →
- * more lines. Each movement gets its own couplet, headed by the key it
- * ended up in, and coloured by how it felt and how it ended.
+ * Lyrics follow the mood trend and the length of the goal:
+ * more days → more lines. Each subtask gets its own couplet, coloured
+ * by how it felt and by how it ended.
  */
-function generateLyrics(goalData, score) {
+function generateLyrics(goalData) {
   const data = goalData || getFullGoalData();
-  const s = score || composeScore(data);
   const allLogs = data.subtasks.flatMap((t) => t.dailyLogs);
   if (!allLogs.length) return '';
 
-  const dates = s.dates;
+  const dates = [...new Set(allLogs.map((l) => l.date))].sort((a, b) => a.localeCompare(b));
   const days = dates.length;
   // Real dates mean duration is the calendar span, not the number of
   // days worked — a goal with gaps in it genuinely took longer.
   const span = daysBetween(dates[0], dates[days - 1]);
-  const avg = averageMood(allLogs);
+  const avg = allLogs.reduce((s, l) => s + l.mood, 0) / allLogs.length;
   const trend = moodTrend(allLogs);
   const goal = data.goalName || 'this thing';
 
   const lines = [];
 
   lines.push(`[ ${goal} ]`);
-  lines.push(`${s.subtitle}  ·  ♩=${s.tempo}`);
+  lines.push(`${formatDay(dates[0])} — ${formatDay(dates[days - 1])}`);
   lines.push('');
   // Two openers lead with {goal}; the user's own casing shouldn't start a line lowercase.
   const opener = pick(OPENERS[trend], days).replace('{goal}', goal);
@@ -769,15 +548,17 @@ function generateLyrics(goalData, score) {
     : `${days} day${days === 1 ? '' : 's'} of it, and I kept the tally.`);
   lines.push('');
 
-  s.movements.forEach((m, i) => {
-    const band = m.avgMood >= 3.5 ? 'high' : m.avgMood >= 2.5 ? 'mid'
-               : m.avgMood >= 1.5 ? 'low' : 'dark';
+  data.subtasks.forEach((task, i) => {
+    if (!task.dailyLogs.length) return;
 
-    lines.push(`— ${m.taskName} · ${m.tonicName} ${m.modeName} —`);
+    const taskAvg = task.dailyLogs.reduce((s, l) => s + l.mood, 0) / task.dailyLogs.length;
+    const hours = task.dailyLogs.reduce((s, l) => s + l.hours, 0);
+    const band = taskAvg >= 3.5 ? 'high' : taskAvg >= 2.5 ? 'mid' : taskAvg >= 1.5 ? 'low' : 'dark';
+
+    lines.push(`— ${task.taskName} —`);
     lines.push(pick(VERSE[band], i));
-    lines.push(`${m.hours.toFixed(1)} hours in, ${m.days} day${m.days === 1 ? '' : 's'} marked.`);
-    lines.push(pick(ENDING[m.status], i));
-    if (m.turned) lines.push('(written in shadow on purpose — the suite needed a fall here)');
+    lines.push(`${hours.toFixed(1)} hours in, ${task.dailyLogs.length} day${task.dailyLogs.length === 1 ? '' : 's'} marked.`);
+    lines.push(pick(ENDING[task.status], i));
     lines.push('');
   });
 
@@ -795,7 +576,7 @@ function generateLyrics(goalData, score) {
 
   lines.push('[ outro ]');
   if (!isGoalFinished()) {
-    lines.push('Not finished. The song stops on the dominant,');
+    lines.push('Not finished. The song stops mid-phrase,');
     lines.push('because that is honestly where I am.');
   } else if (gaveUp === 0) {
     lines.push(`All ${done} of them, closed out.`);
@@ -853,84 +634,37 @@ function pick(arr, seed) {
 
 /* ── Audio plumbing ────────────────────────────────────────── */
 
-/* Everything runs through one reverb. It's a synthetic impulse — noise
-   under an exponential decay — which is enough to stop the oscillators
-   sounding like a test tone and put them in a room instead. */
 function getAudioContext() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    master = audioCtx.createGain();
-    master.gain.value = 0.8;
-    master.connect(audioCtx.destination);
-
-    const wet = audioCtx.createGain();
-    wet.gain.value = 0.32;
-    const verb = audioCtx.createConvolver();
-    verb.buffer = impulseResponse(audioCtx, 2.8, 2.6);
-
-    master.connect(wet);
-    wet.connect(verb);
-    verb.connect(audioCtx.destination);
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.9;
+    masterGain.connect(audioCtx.destination);
   }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
 
-function impulseResponse(ctx, seconds, decay) {
-  const len = Math.floor(ctx.sampleRate * seconds);
-  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = buf.getChannelData(ch);
-    for (let i = 0; i < len; i++) {
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
-    }
-  }
-  return buf;
-}
+function scheduleEvent(ctx, ev, start) {
+  const at = start + ev.time;
 
-/** Schedule a whole score against the audio clock. */
-function playScore(score, opts) {
-  const o = opts || {};
-  const ctx = getAudioContext();
-  const spb = 60 / score.tempo;
-  const start = ctx.currentTime + 0.12;
-  const from = o.fromBeat || 0;
-  const to = o.toBeat === undefined ? Infinity : o.toBeat;
-
-  score.melody.forEach((ev) => {
-    if (ev.beat < from || ev.beat >= to) return;
-    voice(ctx, ev.midis, start + (ev.beat - from) * spb,
-          ev.beats * spb * 0.92, 0.20 * ev.vel, 'triangle');
-  });
-
-  score.bass.forEach((ev) => {
-    if (ev.beat < from || ev.beat >= to) return;
-    voice(ctx, ev.midis, start + (ev.beat - from) * spb,
-          ev.beats * spb * 0.98, 0.09, 'sine');
-  });
-}
-
-/** One chord: an oscillator per pitch, under a shared envelope shape. */
-function voice(ctx, midis, at, dur, gain, wave) {
-  midis.forEach((midi) => {
+  ev.midis.forEach((midi) => {
     const osc = ctx.createOscillator();
     const env = ctx.createGain();
 
-    osc.type = wave;
+    osc.type = ev.wave;
     osc.frequency.value = midiToFreq(midi);
 
-    const peak = gain / Math.sqrt(midis.length);
-    const attack = Math.min(0.05, dur * 0.2);
+    const peak = ev.gain / Math.sqrt(ev.midis.length);
+    const attack = Math.min(0.04, ev.dur * 0.2);
 
     env.gain.setValueAtTime(0.0001, at);
     env.gain.linearRampToValueAtTime(peak, at + attack);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    env.gain.exponentialRampToValueAtTime(0.0001, at + ev.dur);
 
     osc.connect(env);
-    env.connect(master);
+    env.connect(masterGain);
     osc.start(at);
-    osc.stop(at + dur + 0.05);
+    osc.stop(at + ev.dur + 0.05);
 
     activeNodes.push(osc);
     osc.onended = () => {
@@ -944,689 +678,15 @@ function midiToFreq(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-/* ── The chime ─────────────────────────────────────────────────
-   Struck metal, not a beep: a bell's partials are inharmonic, so the
-   overtones sit at odd ratios of the fundamental and each one decays
-   faster than the one below it. Four partials is enough to read as a
-   bell. The reward arpeggio is built out of the mode the movement was
-   actually written in, so the sound you get is the music you earned. */
-
-function bell(ctx, freq, at, dur, gain) {
-  const PARTIALS = [1, 2.00, 2.76, 5.40];
-  const WEIGHT   = [1, 0.42, 0.26, 0.11];
-  const DECAY    = [1, 0.72, 0.50, 0.30];
-
-  PARTIALS.forEach((mult, i) => {
-    const osc = ctx.createOscillator();
-    const env = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = freq * mult;
-
-    const d = dur * DECAY[i];
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.linearRampToValueAtTime(gain * WEIGHT[i], at + 0.006);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + d);
-
-    osc.connect(env);
-    env.connect(master);
-    osc.start(at);
-    osc.stop(at + d + 0.05);
-    activeNodes.push(osc);
-    osc.onended = () => {
-      activeNodes = activeNodes.filter((n) => n !== osc);
-      try { env.disconnect(); } catch (e) { /* already gone */ }
-    };
-  });
+/** Scale degree → semitones, wrapping into higher octaves past the 7th. */
+function degreeToSemitone(scale, degree) {
+  const octave = Math.floor(degree / scale.length);
+  const idx = ((degree % scale.length) + scale.length) % scale.length;
+  return scale[idx] + 12 * octave;
 }
 
-/* Which degrees of the earned mode the chime arpeggiates. */
-const CHIME_FIGURE = {
-  completed: [0, 2, 4, 7],            // up through the triad and home
-  given_up:  [7, 4, 2, 1],            // down, and it stops on the 2nd
-  goal:      [0, 4, 2, 7, 9, 11],     // the whole thing opening out
-  silent:    [4, 4],
-};
-
-/**
- * Play the reward chime. `key` is a mode name, so a movement written in
- * Phrygian rewards you with a Phrygian chime.
- */
-function playChime(kind, key, tonicPc) {
-  const ctx = getAudioContext();
-  const steps = (MODES[key] || MODES.ionian).steps;
-  const root = 72 + (tonicPc || 0);
-  const figure = CHIME_FIGURE[kind] || CHIME_FIGURE.completed;
-  const gap = kind === 'given_up' ? 0.15 : 0.105;
-  const t0 = ctx.currentTime + 0.05;
-
-  figure.forEach((deg, i) => {
-    const midi = root + degreeToSemitone(steps, deg);
-    bell(ctx, midiToFreq(midi), t0 + i * gap, 2.1 - i * 0.12, 0.22);
-    // A quiet octave above each strike — the sparkle on top.
-    bell(ctx, midiToFreq(midi + 12), t0 + i * gap + 0.012, 0.9, 0.055);
-  });
-
-  const tail = t0 + figure.length * gap + 0.06;
-
-  if (kind === 'given_up') {
-    // A suspension left hanging: the 4th never falls to the 3rd.
-    [0, 3, 4].forEach((deg) => {
-      bell(ctx, midiToFreq(root - 12 + degreeToSemitone(steps, deg)), tail, 3.4, 0.10);
-    });
-  } else {
-    [0, 2, 4, 7].forEach((deg) => {
-      bell(ctx, midiToFreq(root - 12 + degreeToSemitone(steps, deg)), tail, 3.0, 0.09);
-    });
-  }
-}
-
-
-/* ══ SHEET ═════════════════════════════════════════════════════ */
-
-/*  The same score, written down. Everything here works off the beat
-    timeline in composeScore(), chopped into measures once and then
-    handed to three writers: MusicXML (which is what MuseScore reads),
-    MIDI, and an SVG engraving for the page itself.                     */
-
-const DIVISIONS = 4;   // MusicXML ticks per quarter note → 16th resolution
-
-/* Beat length → note value. Anything else is built by tying these. */
-const DUR_TABLE = [
-  [4,    'whole',   0],
-  [3,    'half',    1],
-  [2,    'half',    0],
-  [1.5,  'quarter', 1],
-  [1,    'quarter', 0],
-  [0.75, 'eighth',  1],
-  [0.5,  'eighth',  0],
-  [0.25, '16th',    0],
-];
-
-function round4(n) {
-  return Math.round(n * 4) / 4;
-}
-
-/** Break an arbitrary length into writable note values, largest first. */
-function splitDuration(beats) {
-  const out = [];
-  let left = round4(beats);
-  DUR_TABLE.forEach(([v]) => {
-    while (left >= v - 1e-9) { out.push(v); left = round4(left - v); }
-  });
-  return out.length ? out : [0.25];
-}
-
-function noteInfo(v) {
-  return DUR_TABLE.find((d) => Math.abs(d[0] - v) < 1e-9) || DUR_TABLE[7];
-}
-
-/**
- * Chop one voice's events into measures. Gaps become rests, anything
- * crossing a barline is split and tied, and anything that isn't a plain
- * note value is split and tied too. Events in a voice never overlap,
- * which is what lets a single cursor do the work.
- */
-function buildMeasures(events, totalBeats) {
-  const count = Math.max(1, Math.ceil(totalBeats / BEATS_PER_MEASURE - 1e-9));
-  const bins = Array.from({ length: count }, () => []);
-
-  events.forEach((ev) => {
-    let b = ev.beat;
-    let left = ev.beats;
-    let first = true;
-
-    while (left > 1e-9) {
-      const m = Math.min(count - 1, Math.floor(b / BEATS_PER_MEASURE + 1e-9));
-      const take = Math.min(left, (m + 1) * BEATS_PER_MEASURE - b);
-      bins[m].push({
-        off: round4(b - m * BEATS_PER_MEASURE),
-        beats: round4(take),
-        midis: ev.midis,
-        lyric: first ? ev.lyric : null,
-        tieStart: left - take > 1e-9,
-        tieStop: !first,
-      });
-      b += take;
-      left = round4(left - take);
-      first = false;
-    }
-  });
-
-  return bins.map((items) => {
-    items.sort((a, b) => a.off - b.off);
-    const out = [];
-    let cursor = 0;
-
-    const rest = (beats) => splitDuration(beats).forEach((p) => out.push({ rest: true, beats: p }));
-
-    items.forEach((it) => {
-      if (it.off > cursor + 1e-9) rest(round4(it.off - cursor));
-      const pieces = splitDuration(it.beats);
-      pieces.forEach((p, i) => out.push({
-        midis: it.midis,
-        beats: p,
-        lyric: i === 0 ? it.lyric : null,
-        tieStop: it.tieStop || i > 0,
-        tieStart: it.tieStart || i < pieces.length - 1,
-      }));
-      cursor = round4(it.off + it.beats);
-    });
-
-    if (cursor < BEATS_PER_MEASURE - 1e-9) rest(round4(BEATS_PER_MEASURE - cursor));
-    return out;
-  });
-}
-
-/* ── Spelling ──────────────────────────────────────────────── */
-
-const SHARP_SPELL = [['C', 0], ['C', 1], ['D', 0], ['D', 1], ['E', 0], ['F', 0],
-                     ['F', 1], ['G', 0], ['G', 1], ['A', 0], ['A', 1], ['B', 0]];
-const FLAT_SPELL  = [['C', 0], ['D', -1], ['D', 0], ['E', -1], ['E', 0], ['F', 0],
-                     ['G', -1], ['G', 0], ['A', -1], ['A', 0], ['B', -1], ['B', 0]];
-
-const STEP_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
-
-/** A MIDI number as a written note, spelled to match the key signature. */
-function spell(midi, fifths) {
-  const pc = ((midi % 12) + 12) % 12;
-  const [step, alter] = (fifths < 0 ? FLAT_SPELL : SHARP_SPELL)[pc];
-  return { step, alter, octave: Math.floor(midi / 12) - 1 };
-}
-
-/** Which letters the key signature already alters, and by how much. */
-function keyAlterMap(fifths) {
-  const sharps = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
-  const flats  = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
-  const map = {};
-  if (fifths > 0) sharps.slice(0, fifths).forEach((s) => { map[s] = 1; });
-  if (fifths < 0) flats.slice(0, -fifths).forEach((s) => { map[s] = -1; });
-  return map;
-}
-
-/* ── MusicXML ──────────────────────────────────────────────────
-   The format MuseScore, Sibelius, Finale and Dorico all read. Element
-   order inside <note> is fixed by the DTD, so it's spelled out here
-   rather than assembled loosely. Accidentals are left off deliberately:
-   <alter> plus the key signature is enough, and the notation program
-   draws them the way its own house style wants. */
-
-function toMusicXML(score) {
-  const mel = buildMeasures(score.melody, score.totalBeats);
-  const bas = buildMeasures(score.bass, score.totalBeats);
-  const count = Math.max(mel.length, bas.length);
-
-  // Where each movement begins, keyed by measure number.
-  const starts = new Map();
-  score.movements.forEach((m) => starts.set(Math.round(m.startBeat / BEATS_PER_MEASURE), m));
-
-  const part = (measures, id, clefSign, clefLine, voice) => {
-    let fifths = null;
-    const body = [];
-
-    for (let i = 0; i < count; i++) {
-      const items = measures[i] || [{ rest: true, beats: 4 }];
-      const mv = starts.get(i);
-      const attrs = [];
-
-      if (i === 0) {
-        attrs.push(`<divisions>${DIVISIONS}</divisions>`);
-      }
-      if (mv || i === 0) {
-        fifths = mv ? mv.fifths : 0;
-        attrs.push(`<key><fifths>${fifths}</fifths><mode>${
-          mv && mv.family === 'shadow' ? 'minor' : 'major'}</mode></key>`);
-      }
-      if (i === 0) {
-        attrs.push(`<time><beats>${BEATS_PER_MEASURE}</beats><beat-type>4</beat-type></time>`);
-        attrs.push(`<clef><sign>${clefSign}</sign><line>${clefLine}</line></clef>`);
-      }
-
-      const dirs = [];
-      if (i === 0) {
-        dirs.push(
-          '<direction placement="above"><direction-type><metronome>' +
-          `<beat-unit>quarter</beat-unit><per-minute>${score.tempo}</per-minute>` +
-          `</metronome></direction-type><sound tempo="${score.tempo}"/></direction>`
-        );
-      }
-      if (mv && id === 'P1') {
-        dirs.push(
-          '<direction placement="above"><direction-type>' +
-          `<words font-weight="bold">${xmlEscape(mv.taskName)}</words>` +
-          '</direction-type></direction>',
-          '<direction placement="above"><direction-type>' +
-          `<words font-style="italic">${xmlEscape(
-            `${mv.tonicName} ${mv.modeName} — ${mv.feel} — ${mv.cadence}`)}</words>` +
-          '</direction-type></direction>'
-        );
-      }
-
-      body.push(
-        `    <measure number="${i + 1}">\n` +
-        (attrs.length ? `      <attributes>${attrs.join('')}</attributes>\n` : '') +
-        dirs.map((d) => `      ${d}\n`).join('') +
-        items.map((it) => `      ${noteXML(it, fifths || 0, voice)}\n`).join('') +
-        '    </measure>'
-      );
-    }
-
-    return `  <part id="${id}">\n${body.join('\n')}\n  </part>`;
-  };
-
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" ' +
-    '"http://www.musicxml.org/dtds/partwise.dtd">\n' +
-    '<score-partwise version="3.1">\n' +
-    `  <work><work-title>${xmlEscape(score.title)}</work-title></work>\n` +
-    '  <identification>\n' +
-    '    <creator type="composer">Polaris</creator>\n' +
-    `    <creator type="lyricist">${xmlEscape(score.title)}</creator>\n` +
-    `    <rights>${xmlEscape(score.subtitle)}</rights>\n` +
-    '    <encoding><software>Polaris</software>' +
-    `<encoding-date>${todayISO()}</encoding-date></encoding>\n` +
-    '  </identification>\n' +
-    '  <part-list>\n' +
-    '    <score-part id="P1"><part-name>The days</part-name>\n' +
-    '      <score-instrument id="P1-I1"><instrument-name>Celesta</instrument-name></score-instrument>\n' +
-    '      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>9</midi-program></midi-instrument>\n' +
-    '    </score-part>\n' +
-    '    <score-part id="P2"><part-name>The ground</part-name>\n' +
-    '      <score-instrument id="P2-I1"><instrument-name>Warm pad</instrument-name></score-instrument>\n' +
-    '      <midi-instrument id="P2-I1"><midi-channel>2</midi-channel><midi-program>90</midi-program></midi-instrument>\n' +
-    '    </score-part>\n' +
-    '  </part-list>\n' +
-    part(mel, 'P1', 'G', 2, 1) + '\n' +
-    part(bas, 'P2', 'F', 4, 1) + '\n' +
-    '</score-partwise>\n';
-}
-
-function noteXML(item, fifths, voice) {
-  const info = noteInfo(item.beats);
-  const dur = Math.round(item.beats * DIVISIONS);
-  const dots = '<dot/>'.repeat(info[2]);
-
-  if (item.rest) {
-    return `<note><rest/><duration>${dur}</duration>` +
-           `<voice>${voice}</voice><type>${info[1]}</type>${dots}</note>`;
-  }
-
-  return item.midis.map((midi, i) => {
-    const p = spell(midi, fifths);
-    const ties = (item.tieStop ? '<tie type="stop"/>' : '') +
-                 (item.tieStart ? '<tie type="start"/>' : '');
-    const tied = (item.tieStop ? '<tied type="stop"/>' : '') +
-                 (item.tieStart ? '<tied type="start"/>' : '');
-    const lyric = i === 0 && item.lyric
-      ? `<lyric number="1"><syllabic>single</syllabic><text>${xmlEscape(item.lyric)}</text></lyric>`
-      : '';
-
-    return '<note>' +
-      (i ? '<chord/>' : '') +
-      `<pitch><step>${p.step}</step>${p.alter ? `<alter>${p.alter}</alter>` : ''}` +
-      `<octave>${p.octave}</octave></pitch>` +
-      `<duration>${dur}</duration>${ties}<voice>${voice}</voice><type>${info[1]}</type>${dots}` +
-      (tied ? `<notations>${tied}</notations>` : '') +
-      lyric +
-      '</note>';
-  }).join('');
-}
-
-function xmlEscape(str) {
-  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]
-  ));
-}
-
-/* ── MIDI ──────────────────────────────────────────────────────
-   A standard type-1 file, written by hand: one meta track for tempo and
-   title, then one track per voice. Nothing here needs a library — the
-   format is a header chunk and some delta-timed bytes. */
-
-function toMIDI(score) {
-  const TPQ = 480;
-
-  const meta = [];
-  pushText(meta, 0x03, score.title);
-  const usPerQuarter = Math.round(60000000 / score.tempo);
-  meta.push(0, 0xFF, 0x51, 0x03,
-    (usPerQuarter >> 16) & 0xFF, (usPerQuarter >> 8) & 0xFF, usPerQuarter & 0xFF);
-  meta.push(0, 0xFF, 0x58, 0x04, BEATS_PER_MEASURE, 2, 24, 8);
-
-  const voiceTrack = (events, channel, program, name) => {
-    const out = [];
-    pushText(out, 0x03, name);
-    out.push(0, 0xC0 | channel, program);
-
-    const timed = [];
-    events.forEach((ev) => {
-      const on = Math.round(ev.beat * TPQ);
-      const off = Math.round((ev.beat + ev.beats) * TPQ) - 4;
-      ev.midis.forEach((m) => {
-        const vel = Math.round(28 + (ev.vel === undefined ? 0.5 : ev.vel) * 84);
-        timed.push({ tick: on, bytes: [0x90 | channel, m & 0x7F, vel] });
-        timed.push({ tick: Math.max(on + 1, off), bytes: [0x80 | channel, m & 0x7F, 0] });
-      });
-    });
-    // Note-offs sort before note-ons at the same tick, so repeated pitches
-    // don't cut each other short.
-    timed.sort((a, b) => a.tick - b.tick || (a.bytes[0] & 0xF0) - (b.bytes[0] & 0xF0));
-
-    let last = 0;
-    timed.forEach((e) => {
-      pushVarLen(out, e.tick - last);
-      out.push(...e.bytes);
-      last = e.tick;
-    });
-    return out;
-  };
-
-  const chunks = [
-    chunk('MTrk', meta.concat([0, 0xFF, 0x2F, 0x00])),
-    chunk('MTrk', voiceTrack(score.melody, 0, 9, 'The days').concat([0, 0xFF, 0x2F, 0x00])),
-    chunk('MTrk', voiceTrack(score.bass, 1, 90, 'The ground').concat([0, 0xFF, 0x2F, 0x00])),
-  ];
-
-  const header = chunk('MThd', [0, 1, 0, chunks.length, (TPQ >> 8) & 0xFF, TPQ & 0xFF]);
-  return new Uint8Array([].concat(header, ...chunks));
-
-  function chunk(id, data) {
-    const len = data.length;
-    return [...id].map((c) => c.charCodeAt(0))
-      .concat([(len >> 24) & 0xFF, (len >> 16) & 0xFF, (len >> 8) & 0xFF, len & 0xFF], data);
-  }
-
-  function pushVarLen(out, value) {
-    let v = Math.max(0, Math.round(value));
-    const bytes = [v & 0x7F];
-    v >>= 7;
-    while (v > 0) { bytes.unshift((v & 0x7F) | 0x80); v >>= 7; }
-    out.push(...bytes);
-  }
-
-  function pushText(out, type, text) {
-    const bytes = [...String(text)].map((c) => c.charCodeAt(0) & 0x7F).slice(0, 120);
-    out.push(0, 0xFF, type);
-    pushVarLen(out, bytes.length);
-    out.push(...bytes);
-  }
-}
-
-/* ── Engraving ─────────────────────────────────────────────────
-   White ink on indigo paper, the way ref2 has it. Only the melody staff
-   is drawn — the ground moves too slowly to be worth the vertical space
-   on screen, and the downloads carry both parts.
-
-   Vertical position is diatonic, not chromatic: octave×7 + letter. On a
-   treble staff the top line is F5, and every diatonic step is half a
-   space, so one subtraction places any note. */
-
-const STAFF_SPACE = 8;          // distance between staff lines
-const HALF = STAFF_SPACE / 2;   // one diatonic step
-const TOP_DIA = 38;             // F5, the top line of a treble staff
-const SHARP_DIA = [38, 35, 39, 36, 33, 37, 34];   // F C G D A E B
-const FLAT_DIA  = [34, 37, 33, 36, 32, 35, 31];   // B E A D G C F
-
-function diaOf(p) {
-  return p.octave * 7 + STEP_INDEX[p.step];
-}
-
-function engrave(score, opts) {
-  const o = opts || {};
-  const width = o.width || 1120;
-  const maxMeasures = o.maxMeasures || Infinity;
-  const pad = 44;
-  const inner = width - pad * 2;
-
-  const all = buildMeasures(score.melody, score.totalBeats);
-  const measures = all.slice(0, Math.min(all.length, maxMeasures));
-  const truncated = all.length - measures.length;
-
-  const starts = new Map();
-  score.movements.forEach((m) => starts.set(Math.round(m.startBeat / BEATS_PER_MEASURE), m));
-
-  // How wide each measure wants to be, plus room for any clef/key it carries.
-  const widths = measures.map((items) =>
-    Math.max(104, items.reduce((s, it) => s + 26 + it.beats * 20, 22)));
-  const leads = measures.map((_, i) => {
-    const mv = starts.get(i);
-    return (i === 0 ? 0 : 0) + (mv ? 16 + Math.abs(mv.fifths) * 9 : 0);
-  });
-  const CLEF_W = 52;
-
-  // Greedy line-breaking into systems.
-  const systems = [];
-  let cur = { first: 0, count: 0, used: CLEF_W };
-  measures.forEach((_, i) => {
-    const w = widths[i] + leads[i];
-    if (cur.count && cur.used + w > inner) {
-      systems.push(cur);
-      cur = { first: i, count: 0, used: CLEF_W };
-    }
-    cur.count++;
-    cur.used += w;
-  });
-  if (cur.count) systems.push(cur);
-
-  const SYS_H = 122;
-  const height = 74 + systems.length * SYS_H + (truncated ? 34 : 0);
-  const out = [];
-
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" ` +
-           `width="${width}" height="${height}" class="engraving" ` +
-           `font-family="Iowan Old Style, Palatino, Georgia, serif">`);
-  out.push(`<rect width="${width}" height="${height}" fill="#241a72"/>`);
-  out.push(`<text x="${pad}" y="34" fill="#ffffff" font-size="21" ` +
-           `font-style="italic">${xmlEscape(score.title)}</text>`);
-  out.push(`<text x="${width - pad}" y="34" fill="#b9aef6" font-size="12" ` +
-           `text-anchor="end">${xmlEscape(score.subtitle)} · ♩=${score.tempo}</text>`);
-
-  let keyFifths = 0;
-
-  systems.forEach((sys, si) => {
-    const top = 74 + si * SYS_H;
-    const bottom = top + STAFF_SPACE * 4;
-    // Stretch the system so its right edge lines up with every other one.
-    const content = sys.used - CLEF_W;
-    const scale = content > inner * 0.55 ? (inner - CLEF_W) / content : 1;
-
-    for (let l = 0; l < 5; l++) {
-      const y = top + l * STAFF_SPACE;
-      out.push(`<line x1="${pad}" y1="${y}" x2="${width - pad}" y2="${y}" ` +
-               `stroke="#ffffff" stroke-opacity="0.55" stroke-width="1"/>`);
-    }
-
-    out.push(`<text x="${pad + 6}" y="${bottom + 10}" fill="#ffffff" ` +
-             `font-size="46" font-family="Bravura, Zapf Dingbats, Apple Symbols, ` +
-             `STIXGeneral, serif">𝄞</text>`);
-
-    let x = pad + CLEF_W;
-
-    for (let i = sys.first; i < sys.first + sys.count; i++) {
-      const mv = starts.get(i);
-
-      if (mv) {
-        keyFifths = mv.fifths;
-        out.push(`<text x="${x}" y="${top - 12}" fill="#8ee7ff" font-size="12.5" ` +
-                 `font-weight="600">${xmlEscape(mv.taskName)}</text>`);
-        out.push(`<text x="${x}" y="${top - 12}" dx="${
-                   Math.min(240, mv.taskName.length * 7 + 12)}" fill="#c3b7ff" ` +
-                 `font-size="11" font-style="italic">${
-                   xmlEscape(`${mv.tonicName} ${mv.modeName}`)}</text>`);
-        x += drawKeySignature(out, x, top, keyFifths) + 10;
-      }
-
-      const items = measures[i];
-      const alterMap = keyAlterMap(keyFifths);
-      const placed = [];
-
-      items.forEach((it) => {
-        const w = (26 + it.beats * 20) * scale;
-        const cx = x + w * 0.42;
-        if (it.rest) drawRest(out, cx, top, it.beats);
-        else placed.push({ x: cx, item: it, y: drawNote(out, cx, top, it, keyFifths, alterMap) });
-        x += w;
-      });
-
-      // Ties: an arc from a note to whatever follows it in this system.
-      placed.forEach((p, n) => {
-        if (!p.item.tieStart || !placed[n + 1]) return;
-        const y = p.y + 9;
-        out.push(`<path d="M${p.x + 6} ${y} Q${(p.x + placed[n + 1].x) / 2} ${y + 7} ` +
-                 `${placed[n + 1].x - 6} ${y}" fill="none" stroke="#ffffff" ` +
-                 `stroke-opacity="0.6" stroke-width="1.3"/>`);
-      });
-
-      const bar = i === sys.first + sys.count - 1 ? width - pad : x;
-      out.push(`<line x1="${bar}" y1="${top}" x2="${bar}" y2="${bottom}" ` +
-               `stroke="#ffffff" stroke-opacity="0.5" stroke-width="1"/>`);
-      x = bar;
-    }
-  });
-
-  if (truncated) {
-    out.push(`<text x="${pad}" y="${height - 12}" fill="#9a90d4" font-size="12" ` +
-             `font-style="italic">…and ${truncated} more measure${truncated === 1 ? '' : 's'}. ` +
-             `The download has all of them.</text>`);
-  }
-
-  out.push('</svg>');
-  return out.join('');
-}
-
-function drawKeySignature(out, x, top, fifths) {
-  const glyphs = fifths >= 0 ? SHARP_DIA : FLAT_DIA;
-  const sign = fifths >= 0 ? '♯' : '♭';
-  const n = Math.min(7, Math.abs(fifths));
-  for (let i = 0; i < n; i++) {
-    const y = top + (TOP_DIA - glyphs[i]) * HALF;
-    out.push(`<text x="${x + i * 9}" y="${y + 4.5}" fill="#ffffff" font-size="17" ` +
-             `font-family="Apple Symbols, STIXGeneral, serif">${sign}</text>`);
-  }
-  return n * 9;
-}
-
-/** Draw one note or chord. Returns the y of its lowest head. */
-function drawNote(out, cx, top, item, fifths, alterMap) {
-  const info = noteInfo(item.beats);
-  const hollow = info[1] === 'whole' || info[1] === 'half';
-  const spelled = item.midis.map((m) => spell(m, fifths));
-  const dias = spelled.map(diaOf);
-  const ys = dias.map((d) => top + (TOP_DIA - d) * HALF);
-  const lowY = Math.max(...ys);
-  const highY = Math.min(...ys);
-
-  // Ledger lines, above and below, for the outermost heads only.
-  const maxDia = Math.max(...dias);
-  const minDia = Math.min(...dias);
-  for (let d = 40; d <= maxDia; d += 2) ledger(out, cx, top + (TOP_DIA - d) * HALF);
-  for (let d = 28; d >= minDia; d -= 2) ledger(out, cx, top + (TOP_DIA - d) * HALF);
-
-  spelled.forEach((p, i) => {
-    const y = ys[i];
-    if (p.alter !== (alterMap[p.step] || 0)) {
-      const glyph = p.alter === 1 ? '♯' : p.alter === -1 ? '♭' : '♮';
-      out.push(`<text x="${cx - 17}" y="${y + 4.5}" fill="#ffffff" font-size="15" ` +
-               `font-family="Apple Symbols, STIXGeneral, serif">${glyph}</text>`);
-    }
-    out.push(`<ellipse cx="${cx}" cy="${y}" rx="5.4" ry="4" ` +
-             `transform="rotate(-21 ${cx} ${y})" fill="${hollow ? 'none' : '#ffffff'}" ` +
-             `stroke="#ffffff" stroke-width="${hollow ? 1.6 : 1}"/>`);
-  });
-
-  // Dots sit to the right of the head, nudged into a space.
-  if (info[2]) {
-    out.push(`<circle cx="${cx + 10}" cy="${lowY - 4}" r="1.6" fill="#ffffff"/>`);
-  }
-
-  if (info[1] !== 'whole') {
-    const up = Math.max(...dias) < 34;   // stems point away from the middle line
-    const x = cx + (up ? 5.1 : -5.1);
-    const y1 = up ? highY : lowY;
-    const y2 = up ? lowY - 27 : highY + 27;
-    out.push(`<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" ` +
-             `stroke="#ffffff" stroke-width="1.3"/>`);
-
-    if (info[1] === 'eighth' || info[1] === '16th') {
-      const dir = up ? 1 : -1;
-      out.push(`<path d="M${x} ${y2} q7 ${5 * dir} 6 ${13 * dir} q-1 ${-6 * dir} -6 ${-8 * dir}Z" ` +
-               `fill="#ffffff"/>`);
-      if (info[1] === '16th') {
-        out.push(`<path d="M${x} ${y2 + 8 * dir} q7 ${5 * dir} 6 ${13 * dir} ` +
-                 `q-1 ${-6 * dir} -6 ${-8 * dir}Z" fill="#ffffff"/>`);
-      }
-    }
-  }
-
-  if (item.lyric) {
-    out.push(`<text x="${cx}" y="${top + 60}" fill="#e7e1ff" font-size="11.5" ` +
-             `text-anchor="middle">${xmlEscape(item.lyric)}</text>`);
-  }
-
-  return lowY;
-}
-
-function ledger(out, cx, y) {
-  out.push(`<line x1="${cx - 9}" y1="${y}" x2="${cx + 9}" y2="${y}" ` +
-           `stroke="#ffffff" stroke-opacity="0.75" stroke-width="1"/>`);
-}
-
-function drawRest(out, cx, top, beats) {
-  const mid = top + STAFF_SPACE * 2;
-  if (beats >= 4) {
-    out.push(`<rect x="${cx - 6}" y="${top + STAFF_SPACE - 4}" width="12" height="4" ` +
-             `fill="#ffffff" fill-opacity="0.75"/>`);
-  } else if (beats >= 2) {
-    out.push(`<rect x="${cx - 6}" y="${mid}" width="12" height="4" ` +
-             `fill="#ffffff" fill-opacity="0.75"/>`);
-  } else {
-    out.push(`<path d="M${cx - 3} ${mid - 9} q6 4 2 8 q-5 4 1 9 q-7 -3 -3 -9 q4 -4 0 -8Z" ` +
-             `fill="#ffffff" fill-opacity="0.8"/>`);
-  }
-}
-
-/* ── Downloads ─────────────────────────────────────────────────
-   Every file is named after the project it came from, so a new goal
-   produces a new set of sheets rather than overwriting the last one. */
-
-function projectSlug() {
-  const base = (state.goalName || 'untitled-goal')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled-goal';
-  return `polaris-${base}-${todayISO()}`;
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function downloadSheet(kind) {
-  const score = currentScore || composeScore(getFullGoalData());
-  if (!score.melody.length) return uiSheetMessage('Log a day first — there is nothing to write down yet.', true);
-
-  const name = projectSlug();
-
-  if (kind === 'musicxml') {
-    downloadBlob(new Blob([toMusicXML(score)], { type: 'application/vnd.recordare.musicxml+xml' }),
-                 `${name}.musicxml`);
-    uiSheetMessage(`Saved ${name}.musicxml — open it in MuseScore.`);
-  } else if (kind === 'midi') {
-    downloadBlob(new Blob([toMIDI(score)], { type: 'audio/midi' }), `${name}.mid`);
-    uiSheetMessage(`Saved ${name}.mid.`);
-  } else if (kind === 'svg') {
-    downloadBlob(new Blob([engrave(score, { width: 1120 })], { type: 'image/svg+xml' }),
-                 `${name}.svg`);
-    uiSheetMessage(`Saved ${name}.svg — the engraved sheet.`);
-  } else if (kind === 'lyrics') {
-    const text = `${score.title}\n${score.subtitle}\n\n${generateLyrics(null, score)}\n`;
-    downloadBlob(new Blob([text], { type: 'text/plain' }), `${name}-lyrics.txt`);
-    uiSheetMessage(`Saved ${name}-lyrics.txt.`);
-  }
+function degreeSpan(scale, degrees) {
+  return degreeToSemitone(scale, degrees);
 }
 
 
@@ -1640,7 +700,6 @@ function renderSubtaskList() {
   const list = document.getElementById('subtaskList');
   const empty = document.getElementById('subtaskEmpty');
   const current = getCurrentSubtask();
-  const byId = new Map((currentScore ? currentScore.movements : []).map((m) => [m.taskId, m]));
 
   list.innerHTML = '';
   empty.style.display = state.subtasks.length ? 'none' : 'block';
@@ -1649,7 +708,6 @@ function renderSubtaskList() {
     const logged = loggedHours(task.taskId);
     const days = task.dailyLogs.length;
     const isCurrent = current && current.taskId === task.taskId;
-    const mv = byId.get(task.taskId);
 
     const li = document.createElement('li');
     li.className = `subtask ${task.status}${isCurrent ? ' current' : ''}`;
@@ -1659,11 +717,6 @@ function renderSubtaskList() {
         <span class="badge ${task.status}">${statusLabel(task.status)}</span>
         <span class="subtask-meta">${logged.toFixed(1)} h · ${days} day${days === 1 ? '' : 's'}</span>
       </div>
-      ${mv ? `<div class="subtask-key ${mv.family}" title="${escapeHtml(mv.feel)} · ${escapeHtml(mv.cadence)}">
-                <span class="key-glyph">${mv.family === 'shadow' ? '♭' : '♯'}</span>
-                ${escapeHtml(`${mv.tonicName} ${mv.modeName}`)}
-                <em>${escapeHtml(mv.feel)}</em>
-              </div>` : ''}
       <div class="subtask-actions"></div>
     `;
     li.querySelector('.subtask-name').textContent = task.taskName;
@@ -1673,12 +726,10 @@ function renderSubtaskList() {
       actions.appendChild(actionButton('Mark complete', 'ghost', () => {
         completeSubtask(task.taskId);
         render();
-        celebrate(task.taskId, 'completed');
       }));
       actions.appendChild(actionButton('Give up', 'ghost danger', () => {
         giveUpSubtask(task.taskId);
         render();
-        celebrate(task.taskId, 'given_up');
       }));
     } else {
       // Closed by mistake, or picked back up — either way, undo it.
@@ -1699,25 +750,11 @@ function renderSubtaskList() {
   });
 }
 
-/**
- * Effort button click: remember the level and set the hours it's worth.
- * The four levels carry their own number and keep the field out of the way;
- * 'Other' has none, so the field appears and takes the cursor.
- */
+/** Effort button click: remember the level, pre-fill the editable hours. */
 function setEffort(level, defaultHours) {
   pendingEffort = level;
-
-  const hoursField = document.getElementById('hoursInput');
-  const hoursRow = document.getElementById('hoursRow');
-  const preset = defaultHours !== undefined ? defaultHours : EFFORT_HOURS[level];
-  const typed = preset === null || preset === undefined;
-
-  hoursRow.hidden = !typed;
-  hoursField.value = typed ? '' : preset;
-  if (typed) {
-    hoursField.focus();
-    hoursField.select();
-  }
+  document.getElementById('hoursInput').value =
+    defaultHours !== undefined ? defaultHours : EFFORT_HOURS[level];
 
   document.querySelectorAll('#effortGrid .chip').forEach((btn) => {
     btn.classList.toggle('selected', btn.dataset.effort === level);
@@ -1751,9 +788,6 @@ function submitDailyLog() {
 
   if (!taskId) return uiMessage('Add a subtask before logging a day.', true);
   if (!pendingEffort) return uiMessage('Pick an effort level.', true);
-  if (pendingEffort === 'other' && !(Number(hours) > 0)) {
-    return uiMessage('Type in how many hours you put in.', true);
-  }
   if (!pendingMood) return uiMessage('Pick a mood.', true);
 
   addDailyLog(taskId, state.currentDate, pendingEffort, hours, pendingMood);
@@ -1767,160 +801,6 @@ function submitDailyLog() {
 
   clearCheckin();
   render();
-}
-
-/* ── The reward ────────────────────────────────────────────────
-   Closing a movement is the only moment in this app that's worth an
-   interruption, so it gets the full treatment: rays, a rarity, the
-   engraved card, a chime built from the mode you just earned. */
-
-const RARITIES = [
-  { key: 'legendary', at: 7.2, label: 'Legendary', glyph: '𝄞' },
-  { key: 'epic',      at: 5.2, label: 'Epic',      glyph: '♬' },
-  { key: 'rare',      at: 3.2, label: 'Rare',      glyph: '♫' },
-  { key: 'common',    at: -99, label: 'Common',    glyph: '♪' },
-];
-
-/**
- * How much this movement is worth. Time spent counts most, then how many
- * separate days it took, then how it felt — and finishing is worth a full
- * point over walking away, without wiping the rest of it out.
- */
-function rarityFor(task) {
-  const logs = task.dailyLogs;
-  const hours = logs.reduce((s, l) => s + l.hours, 0);
-  const immersed = logs.filter((l) => effortBand(l) === 'immersed').length;
-
-  const score =
-    Math.min(4, hours / 2.5) +
-    Math.min(3, logs.length * 0.5) +
-    (averageMood(logs) - 1) +
-    immersed * 0.4 +
-    (task.status === 'completed' ? 1 : -1);
-
-  return { ...RARITIES.find((r) => score >= r.at), score };
-}
-
-const FLAVOUR = {
-  completed_bright: 'It set up the tonic and then it went there. That is the whole feeling.',
-  completed_shadow: 'A minor movement that lands on a major chord. Old trick, still lands.',
-  given_up_bright:  'Everything pointed home and then the floor moved. It is still a chord.',
-  given_up_shadow:  'It stops without arriving. That is a real ending, just not a happy one.',
-  silent:           'Nothing was logged here, so it is written as a rest. Rests are notated too.',
-};
-
-function celebrate(taskId, status) {
-  const task = findSubtask(taskId);
-  if (!task) return;
-
-  const overlay = document.getElementById('rewardOverlay');
-  const card = document.getElementById('rewardCard');
-  const mv = (currentScore ? currentScore.movements : []).find((m) => m.taskId === taskId);
-  const finale = isGoalFinished();
-  const rarity = rarityFor(task);
-
-  const silent = !mv;
-  const family = mv ? mv.family : 'shadow';
-  const flavour = silent ? FLAVOUR.silent : FLAVOUR[`${status}_${family}`];
-
-  // Rarity lives on the overlay so the card, the gem and the flying
-  // notes all pick the same glow colour up off one custom property.
-  overlay.className = `reward-overlay ${rarity.key} ${status}${finale ? ' finale' : ''}`;
-  card.className = `reward-card ${rarity.key} ${status}${finale ? ' finale' : ''}`;
-
-  document.getElementById('rewardKicker').textContent = finale
-    ? 'THE SUITE IS FINISHED'
-    : status === 'completed' ? 'MOVEMENT COMPLETE' : 'MOVEMENT LEFT OPEN';
-
-  document.getElementById('rewardRarity').textContent = rarity.label;
-  document.getElementById('rewardGlyph').textContent = rarity.glyph;
-
-  document.getElementById('rewardTitle').textContent = silent
-    ? 'A movement of rest'
-    : `${mv.tonicName} ${mv.modeName}`;
-
-  document.getElementById('rewardSub').textContent = silent
-    ? task.taskName
-    : `${task.taskName} — ${mv.feel}`;
-
-  const hours = loggedHours(taskId);
-  const stats = [
-    ['Days marked', String(task.dailyLogs.length)],
-    ['Hours', hours.toFixed(1)],
-    ['Notes written', silent ? '0' : String(mv.noteCount)],
-    ['Cadence', silent ? 'none' : mv.cadence],
-    ['Colour', silent ? '—' : (family === 'shadow' ? 'shadow' : 'bright')],
-  ];
-  document.getElementById('rewardStats').innerHTML = stats
-    .map(([k, v]) => `<div class="rw-stat"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
-    .join('');
-
-  document.getElementById('rewardFlavor').textContent = flavour;
-
-  const note = document.getElementById('rewardTurned');
-  note.hidden = !(mv && mv.turned);
-  note.textContent = 'Every third movement is written in shadow on purpose — ' +
-                     'this one was turned even though the days were fine.';
-
-  const finaleBlock = document.getElementById('rewardFinale');
-  finaleBlock.hidden = !finale;
-  if (finale && currentScore) {
-    const bright = currentScore.movements.filter((m) => m.family === 'bright').length;
-    finaleBlock.innerHTML =
-      `<strong>${escapeHtml(currentScore.title)}</strong> is complete — ` +
-      `${currentScore.movements.length} movement${currentScore.movements.length === 1 ? '' : 's'}, ` +
-      `${bright} bright and ${currentScore.movements.length - bright} in shadow, ` +
-      `${currentScore.measureCount} measures. The sheet is ready to download.`;
-  }
-
-  burst(rarity.key);
-  overlay.hidden = false;
-  requestAnimationFrame(() => overlay.classList.add('open'));
-
-  rewardChime = silent
-    ? { kind: 'silent', key: 'aeolian', pc: 0 }
-    : {
-        kind: finale ? 'goal' : status,
-        key: mv.key,
-        pc: TONICS.find((t) => t.name === mv.tonicName).pc,
-      };
-  replayRewardChime();
-
-  document.getElementById('rewardClaim').focus();
-}
-
-let rewardChime = null;
-
-function replayRewardChime() {
-  if (rewardChime) playChime(rewardChime.kind, rewardChime.key, rewardChime.pc);
-}
-
-/** Note glyphs thrown outward from the middle of the card. */
-function burst(rarityKey) {
-  const wrap = document.getElementById('rewardBurst');
-  const glyphs = ['♪', '♫', '♬', '♩', '✦', '𝄞'];
-  const count = { legendary: 34, epic: 26, rare: 20, common: 14 }[rarityKey] || 16;
-
-  wrap.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-    const dist = 120 + Math.random() * 190;
-    const s = document.createElement('span');
-    s.className = 'rw-spark';
-    s.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
-    s.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
-    s.style.setProperty('--dy', `${Math.sin(angle) * dist - 40}px`);
-    s.style.setProperty('--rot', `${(Math.random() * 2 - 1) * 220}deg`);
-    s.style.setProperty('--delay', `${Math.random() * 0.22}s`);
-    s.style.fontSize = `${12 + Math.random() * 16}px`;
-    wrap.appendChild(s);
-  }
-}
-
-function closeReward() {
-  const overlay = document.getElementById('rewardOverlay');
-  overlay.classList.remove('open');
-  setTimeout(() => { overlay.hidden = true; }, 260);
 }
 
 /* ── UI helpers ────────────────────────────────────────────── */
@@ -1940,7 +820,6 @@ function setGoalName(value) {
   state.goalName = value;
   save();
   renderSong();
-  renderSheet();
 }
 
 function setCurrentDate(value) {
@@ -1963,8 +842,7 @@ function goToToday() {
 function clearCheckin() {
   pendingEffort = null;
   pendingMood = null;
-  document.getElementById('hoursInput').value = '';
-  document.getElementById('hoursRow').hidden = true;
+  document.getElementById('hoursInput').value = 0;
   document.querySelectorAll('#effortGrid .chip, #moodGrid .chip')
     .forEach((b) => b.classList.remove('selected'));
 }
@@ -2043,51 +921,10 @@ function renderSong() {
   }
 
   stateLine.textContent = finished
-    ? 'Every subtask is closed out — the movements are stitched into one suite.'
-    : 'Still in progress. This plays what exists so far; the full suite arrives when every subtask is completed or given up.';
+    ? 'Every subtask is closed out — the segments are stitched into one full song.'
+    : 'Still in progress. This plays what exists so far; the full song arrives when every subtask is completed or given up.';
 
-  lyricsEl.textContent = generateLyrics(null, currentScore);
-}
-
-/** The engraved sheet, plus the movement strip and the download row. */
-function renderSheet() {
-  const card = document.getElementById('sheetCard');
-  const strip = document.getElementById('movementStrip');
-  const paper = document.getElementById('sheetPaper');
-  const empty = document.getElementById('sheetEmpty');
-  const meta = document.getElementById('sheetMeta');
-
-  const ready = currentScore && currentScore.melody.length > 0;
-  card.classList.toggle('idle', !ready);
-  empty.style.display = ready ? 'none' : 'block';
-  document.querySelectorAll('#sheetActions button').forEach((b) => { b.disabled = !ready; });
-
-  if (!ready) {
-    strip.innerHTML = '';
-    paper.innerHTML = '';
-    meta.textContent = '';
-    return;
-  }
-
-  const bright = currentScore.movements.filter((m) => m.family === 'bright').length;
-  const shadow = currentScore.movements.length - bright;
-
-  meta.innerHTML =
-    `<strong>${escapeHtml(currentScore.title)}</strong> · ${escapeHtml(currentScore.subtitle)} · ` +
-    `${currentScore.measureCount} measures · ♩=${currentScore.tempo} · ` +
-    `${bright} bright, ${shadow} shadow · files named <code>${escapeHtml(projectSlug())}</code>`;
-
-  strip.innerHTML = currentScore.movements.map((m) => `
-    <div class="mv ${m.family} ${m.status}">
-      <span class="mv-key">${escapeHtml(`${m.tonicName} ${m.modeName}`)}</span>
-      <span class="mv-name">${escapeHtml(m.taskName)}</span>
-      <span class="mv-feel">${escapeHtml(m.feel)}</span>
-      <span class="mv-cad">${escapeHtml(m.cadence)}${m.turned ? ' · turned' : ''}</span>
-    </div>
-  `).join('');
-
-  // The preview is capped; the download always carries the whole thing.
-  paper.innerHTML = engrave(currentScore, { width: 1120, maxMeasures: 40 });
+  lyricsEl.textContent = generateLyrics();
 }
 
 function uiMessage(text, isError) {
@@ -2100,12 +937,6 @@ function uiSongMessage(text, isError) {
   const el = document.getElementById('songState');
   el.textContent = text;
   el.style.color = isError ? 'var(--rose)' : '';
-}
-
-function uiSheetMessage(text, isError) {
-  const el = document.getElementById('sheetMsg');
-  el.textContent = text;
-  el.className = `msg${isError ? ' error' : ''}`;
 }
 
 function actionButton(label, className, onClick) {
@@ -2121,19 +952,16 @@ function statusLabel(status) {
 }
 
 function escapeHtml(str) {
-  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => (
+  return String(str).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
 
 function render() {
-  // One compose per render — every panel below reads the same score.
-  currentScore = composeScore(getFullGoalData());
   renderSubtaskList();
   renderCheckin();
   renderTimeline();
   renderSong();
-  renderSheet();
 }
 
 /* ── Demo + reset ──────────────────────────────────────────── */
@@ -2188,14 +1016,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('subtaskName').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') uiAddSubtask();
-  });
-
-  document.getElementById('rewardOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'rewardOverlay') closeReward();
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !document.getElementById('rewardOverlay').hidden) closeReward();
   });
 
   renderMoodGrid();
