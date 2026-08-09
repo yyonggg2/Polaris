@@ -287,7 +287,7 @@ body {
   z-index: 2;
   right: 34px;
   top: 230px;
-  width: 440px;
+  width: 214px;
   max-height: calc(100% - 260px);
   overflow-y: auto;
   transform: scale(0.8);
@@ -298,6 +298,7 @@ body {
 
 .hero-panel .topbar {
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 12px;
   padding: 0 0 14px;
@@ -306,8 +307,8 @@ body {
 }
 
 .hero-panel .brand { display: none; }
-.hero-panel .goal-field { align-items: flex-end; }
-.hero-panel .goal-field input { min-width: 0; width: 230px; text-align: right; }
+.hero-panel .goal-field { align-items: flex-end; min-width: 0; }
+.hero-panel .goal-field input { min-width: 0; width: 100%; text-align: right; }
 
 .hero-panel .card {
   background: color-mix(in srgb, var(--plum-2) 88%, transparent);
@@ -456,48 +457,16 @@ button:active { transform: translateY(1px); }
 
 .wide { width: 100%; margin-top: 18px; padding: 12px 18px; }
 
-.chip {
-  background: var(--paper);
-  border-color: var(--edge-soft);
-  color: var(--ink-dim);
-  text-align: center;
-}
-
-.chip:hover { border-color: var(--edge); color: var(--ink); }
-
-.chip.selected {
-  background: color-mix(in srgb, var(--cyan) 18%, var(--paper));
-  border-color: var(--cyan);
-  color: var(--ink);
-  font-weight: 650;
-}
-
-/* ── Mood faces ───────────────────────────────────────────────── */
+/* ── Mood faces (timeline only -- the check-in picker is .mood-arc,
+   further down) ──────────────────────────────────────────────── */
 
 [data-mood="1"] { --mood: var(--nova); }
 [data-mood="2"] { --mood: var(--ink-faint); }
 [data-mood="3"] { --mood: var(--cyan); }
 [data-mood="4"] { --mood: var(--star); }
 
-.chip.mood, .mood-dot { color: var(--mood); }
-
-.chip.mood {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 9px 0 7px;
-  opacity: 0.75;
-  transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-}
-
-.chip.mood:hover { opacity: 1; }
-
-.chip.mood.selected {
-  opacity: 1;
-  background: color-mix(in srgb, var(--mood) 16%, var(--paper));
-  border-color: color-mix(in srgb, var(--mood) 55%, transparent);
-}
+.mood-dot { color: var(--mood); display: inline-block; vertical-align: -6px; }
+.mood-dot .mood-face { width: 20px; height: 20px; }
 
 .mood-face {
   width: 38px;
@@ -524,18 +493,6 @@ button:active { transform: translateY(1px); }
 }
 
 .mf-spark { fill: currentColor; opacity: 0.85; }
-
-.mood-word {
-  font-family: var(--font);
-  font-size: 10.5px;
-  letter-spacing: var(--track-tight);
-  color: var(--ink-faint);
-}
-
-.chip.mood.selected .mood-word { color: var(--ink); }
-
-.mood-dot { display: inline-block; vertical-align: -6px; }
-.mood-dot .mood-face { width: 20px; height: 20px; }
 
 /* ── Layout ───────────────────────────────────────────────────── */
 
@@ -578,6 +535,30 @@ button:active { transform: translateY(1px); }
   letter-spacing: var(--track-label);
   text-transform: uppercase;
   color: var(--ink-faint);
+}
+
+/* Hierarchy: Subtask is the decision that matters, effort/mood are just
+   tuning it -- so they carry less visual weight, not equal billing. */
+.field-label.label-primary {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  color: var(--ink-dim);
+}
+
+.field-label.label-secondary {
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+
+.effort-readout {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .empty {
@@ -740,29 +721,142 @@ button:active { transform: translateY(1px); }
 
 /* ── Check-in ─────────────────────────────────────────────────── */
 
-.btn-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
+/* Effort: a slider, not four buttons -- the dragged value is literally
+   the hours logged, no border, no box-in-box, just a track and a dot. */
+.effort-control {
+  position: relative;
+  margin: 4px 0 8px;
+  padding-bottom: 16px;
 }
 
-.btn-grid.moods { grid-template-columns: repeat(4, 1fr); }
+.effort-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin: 9px 0 0;
+  padding: 0;
+  background: var(--edge-soft);
+  border: none;
+  border-radius: var(--pill);
+  outline: none;
+  cursor: pointer;
+}
 
-.chip.other { grid-column: 1 / -1; }
+.effort-slider:hover { background: var(--edge); }
 
-.chip-h {
-  color: var(--ink-faint);
+.effort-slider:focus {
+  outline: none;
+  background: var(--edge);
+  border: none;
+}
+
+.effort-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.effort-slider:active::-webkit-slider-thumb,
+.effort-slider:hover::-webkit-slider-thumb { transform: scale(1.25); }
+
+.effort-slider::-moz-range-track {
+  height: 2px;
+  background: var(--edge-soft);
+  border: none;
+  border-radius: var(--pill);
+}
+
+.effort-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+}
+
+.effort-ticks {
+  position: relative;
+  height: 13px;
+  margin-top: 7px;
+}
+
+.effort-tick {
+  position: absolute;
+  transform: translateX(-50%);
   font-family: var(--font);
-  font-weight: 500;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  color: var(--ink-faint);
 }
 
-.chip.selected .chip-h { color: var(--ink-dim); }
+.effort-tick:first-child { transform: translateX(0); }
+.effort-tick:last-child { transform: translateX(-100%); }
 
-.hours-row[hidden] { display: none; }
+/* Mood: four dots along an arc that echoes the hero's orbit curve.
+   Color carries the meaning; selection shows as a brightness lift plus
+   a short underline, never a ring or border. */
+.mood-arc {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 280 / 90;
+  margin: 10px 0 6px;
+}
 
-.hours { width: 130px; text-align: center; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.mood-arc-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mood-arc-line path {
+  fill: none;
+  stroke: var(--edge-soft);
+  stroke-width: 1.5;
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+}
+
+.mood-point {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--mood);
+  opacity: 0.5;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mood-point:hover { opacity: 0.8; }
+
+.mood-point.selected {
+  opacity: 1;
+  transform: scale(1.25);
+}
+
+.mood-point.selected::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 9px;
+  height: 2px;
+  background: var(--mood);
+  border-radius: var(--pill);
+  transform: translateX(-50%);
+}
 
 /* ── Timeline ─────────────────────────────────────────────────── */
 
@@ -821,36 +915,6 @@ button:active { transform: translateY(1px); }
 
 #playBtn { padding: 12px 26px; font-size: 13px; }
 
-.lyrics {
-  position: relative;
-  margin: 20px 0 0;
-  padding: 26px 30px;
-  border: 1px solid var(--edge-soft);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background-color: var(--paper);
-  font-family: var(--font-score);
-  font-size: 15px;
-  line-height: 1.9;
-  color: var(--ink);
-  white-space: pre-wrap;
-  min-height: 60px;
-}
-
-.lyrics::before {
-  content: "𝄞";
-  position: absolute;
-  top: -22px;
-  right: 18px;
-  font-size: 150px;
-  line-height: 1;
-  color: var(--surface-2);
-  pointer-events: none;
-  user-select: none;
-}
-
-.lyrics:empty { display: none; }
-
 /* ── The sheet ────────────────────────────────────────────────── */
 
 #sheetCard { grid-column: 1 / -1; }
@@ -870,51 +934,6 @@ button:active { transform: translateY(1px); }
   border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
   border-radius: var(--radius-sm);
   padding: 1px 7px;
-}
-
-.movement-strip {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 2px 2px 12px;
-  margin-bottom: 16px;
-}
-
-.movement-strip::-webkit-scrollbar { height: 6px; }
-.movement-strip::-webkit-scrollbar-track { background: transparent; }
-.movement-strip::-webkit-scrollbar-thumb { background: var(--edge); border-radius: var(--pill); }
-
-.mv {
-  --tint: var(--aurora);
-  flex: 0 0 auto;
-  min-width: 176px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 11px 15px;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--tint) 34%, transparent);
-  background: color-mix(in srgb, var(--tint) 8%, var(--paper));
-}
-
-.mv.shadow { --tint: var(--nova); }
-.mv.given_up { opacity: 0.75; border-style: dashed; }
-
-.mv-key {
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--tint);
-}
-
-.mv-name { font-size: 12px; color: var(--ink); }
-.mv-feel { font-size: 11px; color: var(--ink-faint); font-style: italic; }
-
-.mv-cad {
-  font-family: var(--font);
-  font-size: 10px;
-  letter-spacing: var(--track-tight);
-  color: var(--ink-faint);
 }
 
 .sheet-paper {
@@ -1160,10 +1179,6 @@ button:active { transform: translateY(1px); }
   .topbar { padding: 16px; gap: 16px; }
   .goal-field input { min-width: 200px; }
   .layout, .footer { padding-left: 16px; padding-right: 16px; }
-  .btn-grid { grid-template-columns: 1fr; }
-  .btn-grid.moods { grid-template-columns: repeat(4, 1fr); }
-  .lyrics { padding: 18px; font-size: 14px; }
-  .lyrics::before { font-size: 110px; }
   .sheet-actions button { flex: 1 1 100%; }
 }
 

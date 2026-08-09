@@ -80,9 +80,6 @@
 
         <section class="card" id="subtasksCard">
           <h2>Subtasks</h2>
-          <p class="hint">
-            Split the goal up front. You can add or delete subtasks at any point.
-          </p>
 
           <div class="add-row">
             <div class="add-field">
@@ -108,69 +105,37 @@
       <!-- ── Daily check-in ───────────────────────────────────── -->
       <section class="card" id="checkinCard">
         <h2>Today's check-in</h2>
-        <p class="hint">
-          Log one subtask at a time. Two logs on the same day become a chord.
-        </p>
 
-        <label class="field-label" for="logTask">Subtask</label>
+        <label class="field-label label-primary" for="logTask">Subtask</label>
         <select id="logTask" class="select"></select>
 
-        <label class="field-label">Today's effort level</label>
-        <div class="btn-grid" id="effortGrid">
-          <button
-            class="chip"
-            data-effort="barely"
-            onclick="setEffort('barely', 0.5)"
-          >
-            Barely did anything <span class="chip-h">0.5h</span>
-          </button>
-          <button
-            class="chip"
-            data-effort="a_little"
-            onclick="setEffort('a_little', 1)"
-          >
-            Touched on it a little <span class="chip-h">1h</span>
-          </button>
-          <button
-            class="chip"
-            data-effort="a_while"
-            onclick="setEffort('a_while', 2.5)"
-          >
-            Worked on it for a while <span class="chip-h">2.5h</span>
-          </button>
-          <button
-            class="chip"
-            data-effort="immersed"
-            onclick="setEffort('immersed', 4)"
-          >
-            Fully immersed <span class="chip-h">4h</span>
-          </button>
-          <button
-            class="chip other"
-            data-effort="other"
-            onclick="setEffort('other')"
-          >
-            Other
-          </button>
-        </div>
-
-        <!-- Only "Other" needs this: the four levels bring their own hours. -->
-        <div id="hoursRow" class="hours-row" hidden>
-          <label class="field-label" for="hoursInput">Hours</label>
+        <label class="field-label label-secondary" for="effortSlider"
+          >Effort <span id="effortReadout" class="effort-readout">1.0h</span></label
+        >
+        <!-- The slider's value IS the hours logged -- it drives note density
+             directly, so there's nothing left to explain in prose. -->
+        <div class="effort-control">
           <input
-            id="hoursInput"
-            class="hours"
-            type="number"
-            min="0"
-            step="0.25"
-            value=""
-            placeholder="hours"
+            type="range"
+            id="effortSlider"
+            class="effort-slider"
+            min="0.5"
+            max="4"
+            step="0.1"
+            value="1"
+            oninput="setEffortHours(this.value)"
           />
+          <div class="effort-ticks" aria-hidden="true">
+            <span class="effort-tick" style="left:0%">0.5h</span>
+            <span class="effort-tick" style="left:14.3%">1h</span>
+            <span class="effort-tick" style="left:57.1%">2.5h</span>
+            <span class="effort-tick" style="left:100%">4h</span>
+          </div>
         </div>
 
-        <label class="field-label">Today's mood for the project</label>
-        <!-- Faces are drawn in script.js (renderMoodGrid) — see MOOD_FEATURES. -->
-        <div class="btn-grid moods" id="moodGrid"></div>
+        <label class="field-label label-secondary" id="moodLabel">Mood</label>
+        <!-- Color is the signal -- see renderMoodGrid() in script.js. -->
+        <div class="mood-arc" id="moodGrid"></div>
 
         <button class="primary wide" onclick="submitDailyLog()">
           Submit today's log
@@ -181,9 +146,6 @@
       <!-- ── Timeline ─────────────────────────────────────────── -->
       <section class="card" id="timelineCard">
         <h2>Day timeline</h2>
-        <p class="hint">
-          One entry = a single note. Two or more on a day = a chord.
-        </p>
         <div id="timeline" class="timeline"></div>
         <div id="timelineEmpty" class="empty">Nothing logged yet.</div>
       </section>
@@ -199,21 +161,13 @@
           </button>
           <button class="ghost" onclick="stopSong()">■ Stop</button>
         </div>
-
-        <pre id="lyrics" class="lyrics"></pre>
       </section>
 
       <!-- ── The sheet ────────────────────────────────────────── -->
       <section class="card idle" id="sheetCard">
         <h2>The sheet</h2>
-        <p class="hint">
-          Every subtask that got worked on is written out as its own movement,
-          in its own key. The files are named after this project, so a new goal
-          writes a new set of sheets.
-        </p>
 
         <div id="sheetMeta" class="sheet-meta"></div>
-        <div id="movementStrip" class="movement-strip"></div>
 
         <div id="sheetPaper" class="sheet-paper"></div>
         <div id="sheetEmpty" class="empty">

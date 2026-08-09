@@ -1557,11 +1557,6 @@ function drawNote(out, cx, top, item, fifths, alterMap) {
     }
   }
 
-  if (item.lyric) {
-    out.push(`<text x="${cx}" y="${top + 60}" fill="#e0d4cc" font-size="11.5" ` +
-             `text-anchor="middle">${xmlEscape(item.lyric)}</text>`);
-  }
-
   return lowY;
 }
 
@@ -1632,7 +1627,7 @@ function downloadSheet(kind) {
 
 /* ══ UI ════════════════════════════════════════════════════════ */
 
-let pendingEffort = null;   // set by setEffort()
+let pendingHours = 1;       // set by setEffortHours() -- the slider always has a value
 let pendingMood = null;     // set by setMood()
 
 /** Render the subtask list, what's been logged against it, and its actions. */
@@ -1700,46 +1695,44 @@ function renderSubtaskList() {
 }
 
 /**
- * Effort button click: remember the level and set the hours it's worth.
- * The four levels carry their own number and keep the field out of the way;
- * 'Other' has none, so the field appears and takes the cursor.
+ * Effort slider input: the dragged value IS the hours, full stop -- it's
+ * what feeds effortBand() and, from there, note density. No separate
+ * "Other" field, no preset levels to pick between.
  */
-function setEffort(level, defaultHours) {
-  pendingEffort = level;
-
-  const hoursField = document.getElementById('hoursInput');
-  const hoursRow = document.getElementById('hoursRow');
-  const preset = defaultHours !== undefined ? defaultHours : EFFORT_HOURS[level];
-  const typed = preset === null || preset === undefined;
-
-  hoursRow.hidden = !typed;
-  hoursField.value = typed ? '' : preset;
-  if (typed) {
-    hoursField.focus();
-    hoursField.select();
-  }
-
-  document.querySelectorAll('#effortGrid .chip').forEach((btn) => {
-    btn.classList.toggle('selected', btn.dataset.effort === level);
-  });
+function setEffortHours(hours) {
+  pendingHours = Number(hours);
+  document.getElementById('effortReadout').textContent = `${pendingHours.toFixed(1)}h`;
 }
 
-/** Build the four mood buttons from MOODS, so the faces have one home. */
+// Four fixed points along a rising arc (echoes the hero's orbit curve),
+// hand-picked to sit on the quadratic curve M20,72 Q140,-10 260,18 --
+// see .mood-arc-line in styles.css for the matching decorative path.
+const MOOD_ARC_POS = [
+  { x: 7.1,  y: 80 },
+  { x: 35.7, y: 32.8 },
+  { x: 64.2, y: 12.8 },
+  { x: 92.9, y: 20 },
+];
+
+/** Build the four mood dots from MOODS -- color alone carries the mood. */
 function renderMoodGrid() {
   const grid = document.getElementById('moodGrid');
-  grid.innerHTML = MOODS.map((m) => `
-    <button class="chip mood" data-mood="${m.score}" title="${m.label}"
-            aria-label="${m.label}" onclick="setMood(${m.score})">
-      ${moodFace(m.score)}
-      <span class="mood-word">${m.word}</span>
-    </button>
-  `).join('');
+  grid.innerHTML = `
+    <svg class="mood-arc-line" viewBox="0 0 280 90" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M20,72 Q140,-10 260,18" />
+    </svg>
+    ${MOODS.map((m, i) => `
+      <button class="mood-point" data-mood="${m.score}" title="${m.label}"
+              aria-label="${m.label}" onclick="setMood(${m.score})"
+              style="left:${MOOD_ARC_POS[i].x}%; top:${MOOD_ARC_POS[i].y}%"></button>
+    `).join('')}
+  `;
 }
 
-/** Mood button click: remember the score until submit. */
+/** Mood dot click: remember the score until submit. */
 function setMood(score) {
   pendingMood = Number(score);
-  document.querySelectorAll('#moodGrid .chip').forEach((btn) => {
+  document.querySelectorAll('#moodGrid .mood-point').forEach((btn) => {
     btn.classList.toggle('selected', Number(btn.dataset.mood) === pendingMood);
   });
 }
@@ -1747,16 +1740,11 @@ function setMood(score) {
 /** Read the check-in form and hand it to Logic. */
 function submitDailyLog() {
   const taskId = document.getElementById('logTask').value;
-  const hours = document.getElementById('hoursInput').value;
 
   if (!taskId) return uiMessage('Add a subtask before logging a day.', true);
-  if (!pendingEffort) return uiMessage('Pick an effort level.', true);
-  if (pendingEffort === 'other' && !(Number(hours) > 0)) {
-    return uiMessage('Type in how many hours you put in.', true);
-  }
   if (!pendingMood) return uiMessage('Pick a mood.', true);
 
-  addDailyLog(taskId, state.currentDate, pendingEffort, hours, pendingMood);
+  addDailyLog(taskId, state.currentDate, 'other', pendingHours, pendingMood);
 
   const task = findSubtask(taskId);
   const dayData = getDataForDay(state.currentDate);
@@ -1969,11 +1957,11 @@ function goToToday() {
 }
 
 function clearCheckin() {
-  pendingEffort = null;
   pendingMood = null;
-  document.getElementById('hoursInput').value = '';
-  document.getElementById('hoursRow').hidden = true;
-  document.querySelectorAll('#effortGrid .chip, #moodGrid .chip')
+  const slider = document.getElementById('effortSlider');
+  slider.value = 1;
+  setEffortHours(slider.value);
+  document.querySelectorAll('#moodGrid .mood-point')
     .forEach((b) => b.classList.remove('selected'));
 }
 
@@ -2019,7 +2007,7 @@ function renderTimeline() {
 
     const entries = data.entries
       .map((e) => `<div><span class="mood-dot" data-mood="${e.mood}" title="${MOOD_LABEL[e.mood]}">${moodFace(e.mood)}</span>` +
-                  ` ${escapeHtml(e.taskName)} · ${EFFORT_LABEL[e.effort]} · ${e.hours}h</div>`)
+                  ` ${escapeHtml(e.taskName)} · ${EFFORT_LABEL[effortBand(e)]} · ${e.hours}h</div>`)
       .join('');
 
     row.innerHTML = `
@@ -2036,7 +2024,6 @@ function renderTimeline() {
 function renderSong() {
   const btn = document.getElementById('playBtn');
   const stateLine = document.getElementById('songState');
-  const lyricsEl = document.getElementById('lyrics');
 
   const ready = hasAnyLogs();
   const finished = isGoalFinished() && ready;
@@ -2046,21 +2033,17 @@ function renderSong() {
 
   if (!ready) {
     stateLine.textContent = 'Log a day to start writing the song.';
-    lyricsEl.textContent = '';
     return;
   }
 
   stateLine.textContent = finished
     ? 'Every subtask is closed out — the movements are stitched into one suite.'
     : 'Still in progress. This plays what exists so far; the full suite arrives when every subtask is completed or given up.';
-
-  lyricsEl.textContent = generateLyrics(null, currentScore);
 }
 
-/** The engraved sheet, plus the movement strip and the download row. */
+/** The engraved sheet, plus the download row. */
 function renderSheet() {
   const card = document.getElementById('sheetCard');
-  const strip = document.getElementById('movementStrip');
   const paper = document.getElementById('sheetPaper');
   const empty = document.getElementById('sheetEmpty');
   const meta = document.getElementById('sheetMeta');
@@ -2071,7 +2054,6 @@ function renderSheet() {
   document.querySelectorAll('#sheetActions button').forEach((b) => { b.disabled = !ready; });
 
   if (!ready) {
-    strip.innerHTML = '';
     paper.innerHTML = '';
     meta.textContent = '';
     return;
@@ -2084,15 +2066,6 @@ function renderSheet() {
     `<strong>${escapeHtml(currentScore.title)}</strong> · ${escapeHtml(currentScore.subtitle)} · ` +
     `${currentScore.measureCount} measures · ♩=${currentScore.tempo} · ` +
     `${bright} bright, ${shadow} shadow · files named <code>${escapeHtml(projectSlug())}</code>`;
-
-  strip.innerHTML = currentScore.movements.map((m) => `
-    <div class="mv ${m.family} ${m.status}">
-      <span class="mv-key">${escapeHtml(`${m.tonicName} ${m.modeName}`)}</span>
-      <span class="mv-name">${escapeHtml(m.taskName)}</span>
-      <span class="mv-feel">${escapeHtml(m.feel)}</span>
-      <span class="mv-cad">${escapeHtml(m.cadence)}${m.turned ? ' · turned' : ''}</span>
-    </div>
-  `).join('');
 
   // The preview is capped; the download always carries the whole thing.
   paper.innerHTML = engrave(currentScore, { width: 1120, maxMeasures: 40 });
