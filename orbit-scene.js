@@ -63,37 +63,51 @@ function pointCloudSphere(count, radius, colorFn) {
   return geometry;
 }
 
-// ── Earth: muted plum "ocean" with sage-green landmasses ───────────
-const CONTINENTS = Array.from({ length: 6 }, () => {
-  const v = new THREE.Vector3(
-    Math.random() * 2 - 1,
-    Math.random() * 2 - 1,
-    Math.random() * 2 - 1,
-  ).normalize();
-  return { v, size: 0.55 + Math.random() * 0.35 };
-});
+// ── Earth: colors sampled from a real equirectangular photo ────────
+// Loads the image, draws it to an offscreen canvas, and reads back pixel
+// data so any (x,y,z) on the sphere can look up its true surface color.
+function loadEquirectangular(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const { data } = ctx.getImageData(0, 0, img.width, img.height);
+      resolve({ data, width: img.width, height: img.height });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
-const OCEAN = new THREE.Color("#241d27");
-const LAND = new THREE.Color("#6f8a63");
-const LAND_2 = new THREE.Color("#8a9a6f");
-const STONE = new THREE.Color("#b8a88f");
+const earthTex = await loadEquirectangular("equirectangular.jpg");
+
+function sampleEarthTexture(x, y, z) {
+  // (x,y,z) is a point on the unit sphere -> latitude/longitude -> image UV.
+  const lat = Math.asin(y);
+  const lon = Math.atan2(z, x);
+  const u = 0.5 + lon / (Math.PI * 2);
+  const v = 0.5 - lat / Math.PI;
+  const px = Math.min(earthTex.width - 1, Math.max(0, Math.floor(u * earthTex.width)));
+  const py = Math.min(earthTex.height - 1, Math.max(0, Math.floor(v * earthTex.height)));
+  const idx = (py * earthTex.width + px) * 4;
+  return [earthTex.data[idx] / 255, earthTex.data[idx + 1] / 255, earthTex.data[idx + 2] / 255];
+}
+
+// Push sampled colors away from mid-grey so land/ocean/cloud read as
+// distinct at point-cloud scale, instead of collapsing into one speckle.
+const CONTRAST = 1.5;
+function stretch(v) {
+  return Math.min(1, Math.max(0, 0.5 + (v - 0.5) * CONTRAST));
+}
 
 function earthColor(out, x, y, z) {
-  const p = new THREE.Vector3(x, y, z);
-  let land = 0;
-  for (const c of CONTINENTS) {
-    const d = p.distanceTo(c.v);
-    if (d < c.size) land = Math.max(land, 1 - d / c.size);
-  }
-  if (land > 0.05) {
-    out.copy(Math.random() > 0.5 ? LAND : LAND_2);
-    out.multiplyScalar(0.7 + land * 0.4);
-  } else if (Math.random() < 0.015) {
-    out.copy(STONE); // rare stray "structure" point, texture only
-  } else {
-    out.copy(OCEAN);
-    out.multiplyScalar(0.8 + Math.random() * 0.4);
-  }
+  const [r, g, b] = sampleEarthTexture(x, y, z);
+  const t = 0.85 + Math.random() * 0.15; // slight per-point jitter, keeps the scan texture
+  out.setRGB(stretch(r) * t, stretch(g) * t, stretch(b) * t);
 }
 
 function moonColor(out) {
@@ -101,10 +115,18 @@ function moonColor(out) {
   out.setRGB(0.66 * t, 0.6 * t, 0.55 * t); // taupe/stone, like the reference's markers
 }
 
-const earthGeo = pointCloudSphere(7000, 1.6, earthColor);
+const earthGeo = pointCloudSphere(32000, 1.6, earthColor);
 const earthPoints = new THREE.Points(
   earthGeo,
-  new THREE.PointsMaterial({ size: 0.028, vertexColors: true, transparent: true, opacity: 0.92 }),
+  new THREE.PointsMaterial({
+    size: 0.045,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    // Additive blending was tried for glow, but it sums overlapping/adjacent
+    // point colors toward grey-white and erased the continent contrast --
+    // normal blending keeps each point's true sampled color legible.
+  }),
 );
 scene.add(earthPoints);
 
