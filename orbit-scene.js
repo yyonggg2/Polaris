@@ -111,8 +111,8 @@ function earthColor(out, x, y, z) {
 }
 
 function moonColor(out) {
-  const t = 0.7 + Math.random() * 0.3;
-  out.setRGB(0.66 * t, 0.6 * t, 0.55 * t); // taupe/stone, like the reference's markers
+  const t = 0.8 + Math.random() * 0.2;
+  out.setRGB(0.74 * t, 0.56 * t, 0.95 * t); // bright lavender
 }
 
 const earthGeo = pointCloudSphere(32000, 1.6, earthColor);
@@ -131,7 +131,7 @@ const earthPoints = new THREE.Points(
 scene.add(earthPoints);
 
 const moonGroup = new THREE.Group();
-const moonGeo = pointCloudSphere(1800, 0.42, moonColor);
+const moonGeo = pointCloudSphere(4500, 0.42, moonColor);
 const moonPoints = new THREE.Points(
   moonGeo,
   new THREE.PointsMaterial({ size: 0.02, vertexColors: true, transparent: true, opacity: 0.95 }),
@@ -161,7 +161,7 @@ const ringPoints = new THREE.Points(
 scene.add(ringPoints);
 
 // ── Starfield ────────────────────────────────────────────────────
-const STAR_COUNT = 1400;
+const STAR_COUNT = 420;
 const starPos = new Float32Array(STAR_COUNT * 3);
 for (let i = 0; i < STAR_COUNT; i++) {
   const r = 22 + Math.random() * 30;
@@ -188,7 +188,6 @@ function readGoalData() {
   }
 }
 
-const STATUS_MARK = { completed: "✓", given_up: "✕", active: "·" };
 
 const heroGoal = document.getElementById("heroGoal");
 const heroSubtasks = document.getElementById("heroSubtasks");
@@ -212,7 +211,7 @@ function updateReadout() {
 
   heroGoal.textContent = data.goalName || "Untitled goal";
   heroSubtasks.innerHTML = subtasks
-    .map((t) => `<li class="status-${t.status}"><span class="mark">${STATUS_MARK[t.status] || "·"}</span> ${t.taskName}</li>`)
+    .map((t) => `<li class="status-${t.status}">${t.taskName}</li>`)
     .join("");
   heroCoords.textContent = `${String(completed).padStart(3, "0")} / ${String(total).padStart(3, "0")} CLOSED  ·  R = ${orbitRadius.toFixed(2)}`;
 }
@@ -230,9 +229,69 @@ function tick() {
   );
   earthPoints.rotation.y += 0.0009;
   moonPoints.rotation.y += 0.0015;
-  stars.rotation.y += 0.00005;
+  stars.rotation.y += 0.00065;
+  stars.rotation.x += 0.00018;
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 tick();
+
+// ── Player moon — a second, independent scene for the full-screen
+// listening view. script.js isn't a module, so it reaches this through
+// window.start/stopPlayerMoon rather than an import. ──────────────────
+let playerMoon = null;
+
+function startPlayerMoon(canvasEl) {
+  stopPlayerMoon();
+
+  const scene2 = new THREE.Scene();
+  const camera2 = new THREE.PerspectiveCamera(38, 1, 0.1, 10);
+  camera2.position.set(0, 0, 3.3);
+  camera2.lookAt(0, 0, 0);
+
+  const renderer2 = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: true });
+  renderer2.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const group = new THREE.Group();
+  const geo = pointCloudSphere(3200, 1, moonColor);
+  const points = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, opacity: 0.95 }),
+  );
+  group.add(points);
+  scene2.add(group);
+
+  function resize2() {
+    const w = canvasEl.clientWidth;
+    const h = canvasEl.clientHeight;
+    if (!w || !h) return;
+    renderer2.setSize(w, h, false);
+    camera2.aspect = w / h;
+    camera2.updateProjectionMatrix();
+  }
+  resize2();
+  const ro = new ResizeObserver(resize2);
+  ro.observe(canvasEl);
+
+  let raf = null;
+  function tick2() {
+    group.rotation.y += 0.006;
+    renderer2.render(scene2, camera2);
+    raf = requestAnimationFrame(tick2);
+  }
+  tick2();
+
+  playerMoon = { renderer: renderer2, ro, cancel: () => cancelAnimationFrame(raf) };
+}
+
+function stopPlayerMoon() {
+  if (!playerMoon) return;
+  playerMoon.cancel();
+  playerMoon.ro.disconnect();
+  playerMoon.renderer.dispose();
+  playerMoon = null;
+}
+
+window.startPlayerMoon = startPlayerMoon;
+window.stopPlayerMoon = stopPlayerMoon;

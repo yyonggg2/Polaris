@@ -440,6 +440,160 @@ let audioCtx = null;
 let master = null;
 let activeNodes = [];
 let currentScore = null;   // rebuilt on every render; downloads read it
+let isPlaying = false;
+let playEndTimer = null;
+
+/** Swap the hero play button between ▶ and ❙❙, and its tooltip to match. */
+function updatePlayIcon() {
+  const hotspot = document.getElementById('playHotspot');
+  const icon = document.getElementById('playIcon');
+  if (!hotspot || !icon) return;
+  const tip = isPlaying ? 'Stop' : 'Play the song';
+  icon.innerHTML = isPlaying
+    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+  hotspot.dataset.tip = tip;
+  hotspot.setAttribute('aria-label', tip);
+}
+
+/** The hero play button calls this -- open the listening view if idle,
+ * close it if already going. */
+function togglePlay() {
+  if (isPlaying) closePlayer();
+  else openPlayer();
+}
+
+/* ── The player — a full-screen listening view ────────────────────────
+   Opens when the hero play button is pressed: the lavender moon spins in
+   place while notes fly out of it, timed to the music. With the diary
+   toggle on, each new day's worth of notes also surfaces the real logged
+   state for that day -- task, mood, effort -- so the notes can be read
+   against what was actually going on, not an invented caption. */
+let playerVisualTimers = [];
+let lastDiaryKey = null;
+
+function openPlayer(goalData) {
+  const score = composeScore(goalData || getFullGoalData());
+  if (!score.melody.length) {
+    uiSongMessage('Nothing to play yet — log a day first.', true);
+    return;
+  }
+
+  stopSong();
+  stopPlayerVisuals();
+
+  document.getElementById('playerTitle').textContent = score.title;
+  document.getElementById('playerSub').textContent = score.subtitle;
+  document.getElementById('playerNotes').innerHTML = '';
+  const diaryEl = document.getElementById('playerDiary');
+  diaryEl.textContent = '';
+  diaryEl.classList.remove('show');
+  lastDiaryKey = null;
+
+  const overlay = document.getElementById('playerOverlay');
+  overlay.hidden = false;
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  if (window.startPlayerMoon) window.startPlayerMoon(document.getElementById('playerMoonCanvas'));
+
+  playScore(score);
+  isPlaying = true;
+  updatePlayIcon();
+  schedulePlayerVisuals(score);
+
+  clearTimeout(playEndTimer);
+  playEndTimer = setTimeout(() => { isPlaying = false; updatePlayIcon(); }, score.duration * 1000);
+}
+
+function closePlayer() {
+  const overlay = document.getElementById('playerOverlay');
+  overlay.classList.remove('open');
+  setTimeout(() => { overlay.hidden = true; }, 260);
+
+  stopSong();
+  stopPlayerVisuals();
+  if (window.stopPlayerMoon) window.stopPlayerMoon();
+}
+
+function toggleDiary() {
+  const btn = document.getElementById('diaryToggle');
+  const on = btn.getAttribute('aria-pressed') !== 'true';
+  btn.setAttribute('aria-pressed', String(on));
+  btn.dataset.tip = on ? 'Close the diary' : 'Open the diary';
+  if (!on) {
+    const diary = document.getElementById('playerDiary');
+    diary.classList.remove('show');
+    lastDiaryKey = null;
+  }
+}
+
+/** One setTimeout per note, matching playScore()'s own audio-clock math
+ * (same 0.12s lookahead) closely enough that the visuals read as synced. */
+function schedulePlayerVisuals(score) {
+  const spb = 60 / score.tempo;
+  score.melody.forEach((ev) => {
+    const delay = (ev.beat * spb + 0.12) * 1000;
+    playerVisualTimers.push(setTimeout(() => spawnNoteVisual(ev), delay));
+  });
+}
+
+function stopPlayerVisuals() {
+  playerVisualTimers.forEach(clearTimeout);
+  playerVisualTimers = [];
+}
+
+function spawnNoteVisual(ev) {
+  const wrap = document.getElementById('playerNotes');
+  if (wrap) {
+    // Thrown from the moon's own surface, not from an arbitrary point in
+    // the middle of the stage -- the note reads as coming out of it.
+    const moonRadius = wrap.getBoundingClientRect().width * 0.21;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 60 + Math.random() * 90;
+    const sx = Math.cos(angle) * moonRadius;
+    const sy = Math.sin(angle) * moonRadius;
+    const s = document.createElement('span');
+    s.className = 'player-note-spark';
+    s.textContent = ev.midis.length > 1 ? '♫' : '♪';
+    s.style.setProperty('--sx', `${sx}px`);
+    s.style.setProperty('--sy', `${sy}px`);
+    s.style.setProperty('--dx', `${Math.cos(angle) * (moonRadius + dist)}px`);
+    s.style.setProperty('--dy', `${Math.sin(angle) * (moonRadius + dist)}px`);
+    wrap.appendChild(s);
+    setTimeout(() => s.remove(), 1100);
+  }
+
+  const diaryOn = document.getElementById('diaryToggle').getAttribute('aria-pressed') === 'true';
+  if (!diaryOn) return;
+
+  // One line per day actually logged -- not a generated caption. Notes
+  // from the same day share a key, so the line holds still while that
+  // day's run of notes plays and only moves on with a new day.
+  const key = `${ev.taskId}|${ev.date}`;
+  if (key === lastDiaryKey) return;
+  lastDiaryKey = key;
+
+  const task = findSubtask(ev.taskId);
+  const log = task && task.dailyLogs.find((l) => l.date === ev.date);
+  if (!task || !log) return;
+
+  const diary = document.getElementById('playerDiary');
+  diary.textContent = `${formatDay(ev.date)} — ${task.taskName} · ` +
+    `${MOOD_LABEL[log.mood]} · ${EFFORT_LABEL[effortBand(log)]}, ${log.hours}h`;
+  diary.classList.remove('show');
+  void diary.offsetWidth; // restart the fade-in even if the text is changing mid-transition
+  diary.classList.add('show');
+}
+
+/** Bookmark tab click -- pulls the goal/subtask/check-in drawer out from
+ * the left edge, or tucks it back away if it's already open. */
+function toggleHeroDrawer() {
+  const drawer = document.getElementById('heroDrawer');
+  const tab = document.getElementById('bookmarkTab');
+  const isOpen = drawer.classList.toggle('open');
+  tab.setAttribute('aria-expanded', String(isOpen));
+  tab.setAttribute('aria-label', isOpen ? 'Close panel' : 'Open panel');
+}
 
 /**
  * The one function the UI needs. Takes Logic's data (or fetches it),
@@ -455,6 +609,10 @@ function playSong(goalData) {
 
   stopSong();
   playScore(score);
+  isPlaying = true;
+  updatePlayIcon();
+  clearTimeout(playEndTimer);
+  playEndTimer = setTimeout(() => { isPlaying = false; updatePlayIcon(); }, score.duration * 1000);
 
   const bright = score.movements.filter((m) => m.family === 'bright').length;
   const shadow = score.movements.length - bright;
@@ -477,6 +635,9 @@ function stopSong() {
     try { n.stop(); } catch (e) { /* already stopped */ }
   });
   activeNodes = [];
+  clearTimeout(playEndTimer);
+  isPlaying = false;
+  updatePlayIcon();
 }
 
 /* ── Choosing a key ────────────────────────────────────────── */
@@ -594,7 +755,7 @@ function composeScore(goalData) {
               root + degreeToSemitone(steps, MOOD_CHORD_ROOT[log.mood] + x))
           : [root + degreeToSemitone(steps, deg)];
 
-        melody.push({ beat: at, beats: dur, midis, vel: r.vel, date: log.date });
+        melody.push({ beat: at, beats: dur, midis, vel: r.vel, date: log.date, taskId: task.taskId });
         at += dur;
       });
 
@@ -1624,6 +1785,50 @@ function downloadSheet(kind) {
   }
 }
 
+/** One-click PDF export -- rasterizes the same engraved sheet the .svg
+ * download uses, then wraps it in a single-page PDF sized to fit it
+ * exactly (jsPDF, loaded from a CDN in index.html since this is a
+ * client-only app with no build step / bundled dependencies). */
+function downloadSheetPdf() {
+  const score = currentScore || composeScore(getFullGoalData());
+  if (!score.melody.length) {
+    return uiSheetMessage('Log a day first — there is nothing to write down yet.', true);
+  }
+  if (!window.jspdf) {
+    return uiSheetMessage('PDF export is still loading -- try again in a moment.', true);
+  }
+
+  const svgUrl = URL.createObjectURL(
+    new Blob([engrave(score, { width: 1400 })], { type: 'image/svg+xml' }),
+  );
+  const img = new Image();
+  img.onload = () => {
+    const scale = 2; // crisp at print size
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth * scale;
+    canvas.height = img.naturalHeight * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#332830'; // the engraving's own background -- JPEG has no alpha
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(svgUrl);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: img.naturalWidth >= img.naturalHeight ? 'landscape' : 'portrait',
+      unit: 'pt',
+      format: [img.naturalWidth, img.naturalHeight],
+    });
+    // JPEG over PNG: this page is mostly flat colour, so JPEG comes out a
+    // fraction of the size with no visible loss on the staff/notes.
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, img.naturalWidth, img.naturalHeight);
+    doc.save(`${projectSlug()}.pdf`);
+    uiSheetMessage(`Saved ${projectSlug()}.pdf.`);
+  };
+  img.onerror = () => uiSheetMessage('Could not render the sheet for PDF export.', true);
+  img.src = svgUrl;
+}
+
 
 /* ══ UI ════════════════════════════════════════════════════════ */
 
@@ -1635,30 +1840,20 @@ function renderSubtaskList() {
   const list = document.getElementById('subtaskList');
   const empty = document.getElementById('subtaskEmpty');
   const current = getCurrentSubtask();
-  const byId = new Map((currentScore ? currentScore.movements : []).map((m) => [m.taskId, m]));
 
   list.innerHTML = '';
   empty.style.display = state.subtasks.length ? 'none' : 'block';
 
   state.subtasks.forEach((task) => {
-    const logged = loggedHours(task.taskId);
-    const days = task.dailyLogs.length;
     const isCurrent = current && current.taskId === task.taskId;
-    const mv = byId.get(task.taskId);
 
     const li = document.createElement('li');
     li.className = `subtask ${task.status}${isCurrent ? ' current' : ''}`;
     li.innerHTML = `
       <div class="subtask-head">
         <span class="subtask-name"></span>
-        <span class="badge ${task.status}">${statusLabel(task.status)}</span>
-        <span class="subtask-meta">${logged.toFixed(1)} h · ${days} day${days === 1 ? '' : 's'}</span>
+        ${statusBadge(task.status)}
       </div>
-      ${mv ? `<div class="subtask-key ${mv.family}" title="${escapeHtml(mv.feel)} · ${escapeHtml(mv.cadence)}">
-                <span class="key-glyph">${mv.family === 'shadow' ? '♭' : '♯'}</span>
-                ${escapeHtml(`${mv.tonicName} ${mv.modeName}`)}
-                <em>${escapeHtml(mv.feel)}</em>
-              </div>` : ''}
       <div class="subtask-actions"></div>
     `;
     li.querySelector('.subtask-name').textContent = task.taskName;
@@ -1677,7 +1872,7 @@ function renderSubtaskList() {
       }));
     } else {
       // Closed by mistake, or picked back up — either way, undo it.
-      actions.appendChild(actionButton('↩ Reopen', 'ghost', () => {
+      actions.appendChild(iconActionButton('reopen', 'Reopen', 'reopen', () => {
         reopenSubtask(task.taskId);
         render();
         uiMessage(`"${task.taskName}" is active again — its logs were kept.`);
@@ -1722,7 +1917,7 @@ function renderMoodGrid() {
       <path d="M20,72 Q140,-10 260,18" />
     </svg>
     ${MOODS.map((m, i) => `
-      <button class="mood-point" data-mood="${m.score}" title="${m.label}"
+      <button class="mood-point" data-mood="${m.score}" data-tip="${m.label}"
               aria-label="${m.label}" onclick="setMood(${m.score})"
               style="left:${MOOD_ARC_POS[i].x}%; top:${MOOD_ARC_POS[i].y}%"></button>
     `).join('')}
@@ -1935,8 +2130,8 @@ function uiAddSubtask() {
 function setGoalName(value) {
   state.goalName = value;
   save();
-  renderSong();
-  renderSheet();
+  // renderSong()/renderSheet() are paused -- their cards were pulled out
+  // of this page. Logic is intact; re-enable once they're wired up again.
 }
 
 function setCurrentDate(value) {
@@ -2079,37 +2274,34 @@ function uiMessage(text, isError) {
 
 function uiSongMessage(text, isError) {
   const el = document.getElementById('songState');
+  if (!el) return; // the song card isn't on this page right now
   el.textContent = text;
   el.style.color = isError ? 'var(--rose)' : '';
 }
 
 function uiSheetMessage(text, isError) {
   const el = document.getElementById('sheetMsg');
+  if (!el) return; // the sheet card isn't on this page right now
   el.textContent = text;
   el.className = `msg${isError ? ' error' : ''}`;
-}
-
-function actionButton(label, className, onClick) {
-  const btn = document.createElement('button');
-  btn.className = className;
-  btn.textContent = label;
-  btn.addEventListener('click', onClick);
-  return btn;
 }
 
 const ICON_PATHS = {
   check: 'M5 13l4 4L19 7',
   cross: 'M6 6l12 12M18 6L6 18',
   trash: 'M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m2 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10Z',
+  reopen: 'M9 14 4 9l5-5M4 9h10a5 5 0 0 1 0 10h-1',
 };
 
 /** A small round icon button — used where a text label would be too loud
- * (mark complete / give up / delete). The hover title is the only label. */
-function iconActionButton(icon, title, className, onClick) {
+ * (mark complete / give up / delete / reopen). A fast custom tooltip
+ * (data-tip, see styles.css) is the only label -- no native title="",
+ * its hover delay is too slow to feel responsive. */
+function iconActionButton(icon, tip, className, onClick) {
   const btn = document.createElement('button');
   btn.className = `icon-btn ${className}`;
-  btn.title = title;
-  btn.setAttribute('aria-label', title);
+  btn.dataset.tip = tip;
+  btn.setAttribute('aria-label', tip);
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
     `stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS[icon]}"/></svg>`;
   btn.addEventListener('click', onClick);
@@ -2118,6 +2310,21 @@ function iconActionButton(icon, title, className, onClick) {
 
 function statusLabel(status) {
   return { active: 'Active', completed: 'Completed', given_up: 'Given up' }[status] || status;
+}
+
+/** completed/active read as a same-size teal icon (ring+check / dot);
+ * given_up keeps the text pill -- it's the one state worth reading at a
+ * glance, not just scanning for. */
+function statusBadge(status) {
+  if (status === 'given_up') {
+    return `<span class="badge given_up">${statusLabel(status)}</span>`;
+  }
+  const icon = status === 'completed'
+    ? '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L15.5 9"/>'
+    : '<circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>';
+  return `<span class="badge-icon ${status}" data-tip="${statusLabel(status)}">` +
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
+    `stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>`;
 }
 
 function escapeHtml(str) {
@@ -2131,9 +2338,9 @@ function render() {
   currentScore = composeScore(getFullGoalData());
   renderSubtaskList();
   renderCheckin();
-  renderTimeline();
-  renderSong();
-  renderSheet();
+  // renderTimeline()/renderSong()/renderSheet() are paused -- their cards
+  // were pulled out of this page. Logic is intact; re-enable once they're
+  // wired up again.
 }
 
 /* ── Demo + reset ──────────────────────────────────────────── */
@@ -2194,8 +2401,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.id === 'rewardOverlay') closeReward();
   });
 
+  document.getElementById('playerOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'playerOverlay') closePlayer();
+  });
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !document.getElementById('rewardOverlay').hidden) closeReward();
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('rewardOverlay').hidden) closeReward();
+    if (!document.getElementById('playerOverlay').hidden) closePlayer();
   });
 
   renderMoodGrid();

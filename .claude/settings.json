@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(node \"C:\\\\Users\\\\miran\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-miran-Polaris\\\\4a6ac02c-6e94-49d7-ba95-403a87a91abd\\\\scratchpad\\\\drive_panel_scroll.js\")"
+    ]
+  }
+}

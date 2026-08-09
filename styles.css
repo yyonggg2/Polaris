@@ -32,9 +32,10 @@
      set from the point-cloud reference instead of neon. */
   --cyan:      #6f9d97;   /* dusty teal — the one accent colour */
   --cyan-deep: #4c766f;
-  --aurora:    #7c9473;   /* soft green — completed / bright */
+  --cyan-muted: #769692; /* same teal, saturation pulled down -- solid button fills */
+  --aurora:    var(--cyan);      /* completed / bright — same teal as buttons, no green */
   --star:      #c9a15a;   /* muted gold — mood 4 / legendary */
-  --ember:     #b8735a;   /* warm rust — given up / danger */
+  --ember:     var(--ink-faint); /* given up / danger — grey, no red */
   --nova:      #c98a94;   /* dusty pink — mood 1 */
 
   --radius:    4px;
@@ -49,6 +50,18 @@
 }
 
 * { box-sizing: border-box; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 body {
   margin: 0;
@@ -108,27 +121,11 @@ body {
 .hero-row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-}
-
-.menu-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink);
-  text-decoration: none;
-  font-family: var(--font);
-  font-size: 12px;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
+  justify-content: flex-end;
 }
 
 .menu-rule {
-  width: 46px;
+  width: 14px;
   height: 12px;
   background-image: repeating-linear-gradient(
     to bottom, currentColor 0 1px, transparent 1px 3px);
@@ -179,18 +176,16 @@ body {
   color: var(--ink-faint);
 }
 
-.hero-subtasks .mark { display: inline-block; width: 14px; text-align: center; }
-
 .hero-subtasks .status-completed { color: var(--aurora); }
 .hero-subtasks .status-given_up  { color: var(--ember); text-decoration: line-through; opacity: 0.75; }
 .hero-subtasks .status-active    { color: var(--ink); }
 
 .hero-coords {
-  margin: 10px 0 0;
-  font-family: var(--font);
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-dim);
+  /* Hidden for now -- the "001/003 CLOSED · R=..." readout wasn't landing.
+     orbit-scene.js still computes and writes it (that value also drives the
+     Moon's actual orbit radius), just not shown. Delete this rule to bring
+     it back. */
+  display: none;
 }
 
 /* Circular survey markers scattered over the scene — mostly decorative
@@ -209,6 +204,14 @@ body {
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
+/* [data-tip] (below) sets position:relative for its tooltip bubble to
+   anchor to -- same specificity as .hotspot's position:absolute, and it
+   comes later in the file, so it was winning and dropping hotspots (like
+   the play button) into normal document flow instead of the scene. An
+   absolutely-positioned element is just as valid an anchor, so pin it
+   back down here with higher specificity. */
+.hotspot[data-tip] { position: absolute; }
+
 .hotspot.action { cursor: pointer; }
 
 .hotspot.action:hover,
@@ -226,38 +229,6 @@ body {
   background-image: radial-gradient(currentColor 1px, transparent 1.4px);
   background-size: 3.5px 3.5px;
   opacity: 0.8;
-}
-
-/* Compass, bottom right of the hero */
-.compass {
-  position: absolute;
-  right: 30px;
-  bottom: 26px;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: 1px solid var(--edge);
-  display: grid;
-  place-items: center;
-  font-family: var(--font);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--ink-faint);
-  background: color-mix(in srgb, var(--void) 60%, transparent);
-}
-
-.compass::before {
-  content: "N";
-  position: absolute;
-  top: 6px;
-  color: var(--ink-dim);
-}
-
-.compass-needle {
-  width: 1px;
-  height: 20px;
-  background: var(--cyan);
-  transform: translateY(-4px);
 }
 
 .play-hotspot {
@@ -279,67 +250,89 @@ body {
   box-shadow: 0 0 0 1px var(--cyan), 0 8px 24px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 
-/* ── Hero panel — goal/date + subtasks, scaled down and folded into
-   the first screen instead of living below the fold ──────────── */
+/* ── Hero drawer — goal/date + subtasks, with the bookmark tab fused to
+   its top-right corner so the two move as a single rigid piece. Closed,
+   the drawer slides mostly off-screen but not all the way -- the tab
+   (which sits past the panel's own right edge) is what's left peeking
+   at the scene's left border, still there to click. ───────────────── */
 
-.hero-panel {
+.hero-drawer {
   position: absolute;
   z-index: 2;
-  right: 34px;
-  top: 230px;
+  left: 34px;
+  top: 90px;
+  bottom: 26px;
   width: 214px;
-  max-height: calc(100% - 260px);
+  transform: translateX(-192px);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.hero-drawer.open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.hero-drawer .hero-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   transform: scale(0.8);
-  transform-origin: top right;
+  transform-origin: top left;
 }
 
-.hero-panel::-webkit-scrollbar { width: 0; }
+.hero-drawer .hero-panel::-webkit-scrollbar { width: 0; }
 
-.hero-panel .topbar {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 12px;
-  padding: 0 0 14px;
-  border: none;
-  background: transparent;
+/* Bookmark tab — fused to the panel's top-right corner (a sibling laid
+   over it, not nested inside its scroll box, so it isn't clipped when
+   the subtask list scrolls). Counter-scaled by 1/0.8 so it reads at the
+   same physical size the drawer's translateX above was tuned around. */
+.bookmark-tab {
+  position: absolute;
+  z-index: 5;
+  top: -16px;
+  left: 171px;
+  width: 30px;
+  height: 30px;
+  transform: scale(1.25);
+  transform-origin: top left;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--plum-2) 94%, transparent);
+  border: 1px solid var(--edge-soft);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.16s ease, color 0.16s ease;
+  pointer-events: auto; /* stays clickable even while .hero-drawer (its
+    closed-state parent) is pointer-events:none */
 }
 
-.hero-panel .brand { display: none; }
-.hero-panel .goal-field { align-items: flex-end; min-width: 0; }
-.hero-panel .goal-field input { min-width: 0; width: 100%; text-align: right; }
+.bookmark-tab:hover,
+.bookmark-tab[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--cyan) 18%, var(--plum-2));
+  color: var(--cyan);
+}
+
+.hero-panel .card + .card { margin-top: 16px; }
 
 .hero-panel .card {
   background: color-mix(in srgb, var(--plum-2) 88%, transparent);
 }
 
-/* ── Top bar — the actual controls, flat ─────────────────────── */
+/* ── Card head — Goal + Date, folded into the Subtasks card border
+   instead of living in their own bar above it ────────────────── */
 
-.topbar {
+.card-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 26px;
-  padding: 20px 30px;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--edge-soft);
-  background: var(--plum);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-family: var(--font);
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  padding-bottom: 6px;
-}
-
-.brand .star {
-  color: var(--star);
-  font-size: 15px;
 }
 
 .goal-field, .day-field {
@@ -351,10 +344,11 @@ body {
 .day-field {
   flex-direction: row;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
+  align-self: flex-end; /* Date sits under Goal, tucked to the right */
 }
 
-.topbar label {
+.card-head label {
   font-family: var(--font);
   font-size: 10.5px;
   letter-spacing: var(--track-label);
@@ -365,15 +359,26 @@ body {
 .day-field label { align-self: center; }
 
 .goal-field input {
-  min-width: 300px;
+  width: 100%;
   font-size: 15px;
   font-weight: 500;
 }
 
+/* Date reads as plain text, not a boxed field -- no border of its own */
 .day-field input {
-  width: 168px;
+  background: none;
+  border: none;
+  padding: 0;
+  width: auto;
   font-family: var(--font);
   font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  text-align: right;
+}
+
+.day-field input:hover, .day-field input:focus {
+  background: none;
+  border: none;
 }
 
 .day-field input::-webkit-calendar-picker-indicator {
@@ -418,7 +423,7 @@ button {
   font-size: 12.5px;
   letter-spacing: 0.02em;
   font-weight: 550;
-  border-radius: var(--pill);
+  border-radius: var(--radius);
   border: 1px solid transparent;
   padding: 10px 18px;
   cursor: pointer;
@@ -428,8 +433,8 @@ button {
 button:active { transform: translateY(1px); }
 
 .primary {
-  background: var(--cyan);
-  border-color: var(--cyan);
+  background: var(--cyan-muted);
+  border-color: var(--cyan-muted);
   color: var(--void);
   font-weight: 650;
 }
@@ -452,8 +457,6 @@ button:active { transform: translateY(1px); }
 .ghost:hover { border-color: var(--cyan); color: var(--ink); }
 
 .ghost.danger:hover { border-color: var(--ember); color: var(--ember); }
-
-.small { font-size: 11.5px; padding: 7px 14px; }
 
 .wide { width: 100%; margin-top: 18px; padding: 12px 18px; }
 
@@ -636,20 +639,11 @@ button:active { transform: translateY(1px); }
 .subtask-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .subtask-name { font-weight: 600; }
-
-.subtask-meta {
-  margin-left: auto;
-  color: var(--ink-faint);
-  font-family: var(--font);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 
 .badge {
   font-family: var(--font);
@@ -663,20 +657,21 @@ button:active { transform: translateY(1px); }
   color: var(--ink-faint);
 }
 
-.badge.active {
-  color: var(--cyan);
-  border-color: color-mix(in srgb, var(--cyan) 55%, transparent);
-}
-
-.badge.completed {
-  color: var(--aurora);
-  border-color: color-mix(in srgb, var(--aurora) 55%, transparent);
-}
-
 .badge.given_up {
   color: var(--ember);
   border-color: color-mix(in srgb, var(--ember) 55%, transparent);
 }
+
+/* completed/active: same-size teal icon instead of a text pill */
+.badge-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--cyan);
+}
+
+.badge-icon svg { width: 20px; height: 20px; }
 
 .subtask-actions {
   display: flex;
@@ -689,34 +684,81 @@ button:active { transform: translateY(1px); }
 /* Icon-only actions (finish / give up / delete) — a hover title carries
    the label instead of text, so the row stays quiet. */
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
   padding: 0;
   display: grid;
   place-items: center;
   background: transparent;
-  border: 1px solid var(--edge-soft);
+  border: none;
   color: var(--ink-faint);
 }
 
 .icon-btn svg { width: 15px; height: 15px; }
 
-.icon-btn.complete:hover {
-  background: color-mix(in srgb, var(--aurora) 16%, transparent);
-  border-color: color-mix(in srgb, var(--aurora) 55%, transparent);
-  color: var(--aurora);
+.icon-btn.complete:hover { background: color-mix(in srgb, var(--aurora) 16%, transparent); color: var(--aurora); }
+.icon-btn.give-up:hover { background: color-mix(in srgb, var(--ember) 16%, transparent); color: var(--ember); }
+.icon-btn.delete:hover { background: var(--surface-2); color: var(--ink-dim); }
+.icon-btn.reopen:hover, .icon-btn.today:hover { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan); }
+
+/* ── Fast tooltips ─────────────────────────────────────────────
+   Native title="" has a slow, browser-controlled hover delay that
+   can't be tuned. This is instant instead -- a couple frames, not
+   a full second. */
+[data-tip] { position: relative; }
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translate(-50%, 2px);
+  background: var(--void);
+  border: 1px solid var(--edge-soft);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.06s ease, transform 0.06s ease;
+  transition-delay: 0s;
+  z-index: 60;
 }
 
-.icon-btn.give-up:hover {
-  background: color-mix(in srgb, var(--ember) 16%, transparent);
-  border-color: color-mix(in srgb, var(--ember) 55%, transparent);
-  color: var(--ember);
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
-.icon-btn.delete:hover {
-  background: var(--surface-2);
-  border-color: var(--edge);
-  color: var(--ink-dim);
+/* The little triangle pointing from the bubble down at the button --
+   same fill/border as the bubble, rotated square, half tucked behind it. */
+[data-tip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translate(-50%, 50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--void);
+  border-right: 1px solid var(--edge-soft);
+  border-bottom: 1px solid var(--edge-soft);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.06s ease;
+  z-index: 59;
+}
+
+[data-tip]:hover::before,
+[data-tip]:focus-visible::before {
+  opacity: 1;
 }
 
 /* ── Check-in ─────────────────────────────────────────────────── */
@@ -962,25 +1004,6 @@ button:active { transform: translateY(1px); }
 
 .sheet-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.subtask-key {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: -4px 0 10px;
-  font-family: var(--font);
-  font-size: 11px;
-  color: var(--aurora);
-}
-
-.subtask-key.shadow { color: var(--nova); }
-.subtask-key em { color: var(--ink-faint); font-size: 10.5px; font-style: normal; }
-
-.key-glyph {
-  font-family: var(--font);
-  font-size: 14px;
-  opacity: 0.9;
-}
-
 /* ── The reward ───────────────────────────────────────────────── */
 
 [hidden] { display: none !important; }
@@ -1160,15 +1183,177 @@ button:active { transform: translateY(1px); }
   margin-top: 18px;
 }
 
+/* ── The player — full-screen listening view ─────────────────────
+   Opens over everything when the hero play button is pressed
+   (togglePlay() -> openPlayer(), script.js). ─────────────────────── */
+
+.player-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 42%,
+    color-mix(in srgb, var(--plum-2) 92%, transparent) 0%, var(--void) 74%);
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+              transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.player-overlay.open { opacity: 1; transform: scale(1); }
+
+.player-close,
+.player-diary-toggle,
+.player-pdf-btn {
+  position: absolute;
+  top: 26px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--plum-2) 80%, transparent);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-sm);
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.player-close svg, .player-diary-toggle svg, .player-pdf-btn svg { width: 17px; height: 17px; }
+
+.player-close { right: 26px; }
+.player-diary-toggle { left: 26px; }
+.player-pdf-btn { left: 74px; }
+
+.player-close:hover,
+.player-diary-toggle:hover,
+.player-diary-toggle[aria-pressed="true"],
+.player-pdf-btn:hover {
+  background: color-mix(in srgb, var(--cyan) 18%, var(--plum-2));
+  color: var(--cyan);
+}
+
+.player-stage {
+  position: relative;
+  width: min(58vw, 52vh, 440px);
+  height: min(58vw, 52vh, 440px);
+  display: grid;
+  place-items: center;
+}
+
+.player-staff { position: absolute; inset: 0; }
+
+/* The five-line staff, bent into a ring around the moon instead of
+   drawn flat -- it reads as sheet music without needing real notation. */
+.player-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.player-ring.r1 { width: 56%; height: 56%; }
+.player-ring.r2 { width: 68%; height: 68%; }
+.player-ring.r3 { width: 80%; height: 80%; }
+.player-ring.r4 { width: 92%; height: 92%; }
+.player-ring.r5 { width: 104%; height: 104%; }
+
+#playerMoonCanvas {
+  position: relative;
+  z-index: 1;
+  width: 42%;
+  height: 42%;
+}
+
+.player-notes {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.player-note-spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 15px;
+  color: var(--cyan);
+  transform: translate(-50%, -50%);
+  animation: player-note-fly 1.05s ease-out forwards;
+}
+
+/* Starts at (--sx, --sy) -- a point on the moon's own surface -- and
+   flies out from there, so it reads as thrown off the moon rather than
+   spawned in mid-air. */
+@keyframes player-note-fly {
+  0%   { transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0.6); opacity: 0; }
+  15%  { opacity: 0.9; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity: 0; }
+}
+
+.player-diary {
+  min-height: 1.5em;
+  max-width: min(560px, 84vw);
+  margin: 0;
+  text-align: center;
+  font-family: var(--font);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-dim);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.player-diary.show { opacity: 1; transform: translateY(0); }
+
+.player-meta { text-align: center; }
+
+.player-title {
+  margin: 0;
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.player-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
 /* ── Footer ───────────────────────────────────────────────────── */
 
 .footer {
   display: flex;
-  gap: 10px;
+  gap: 18px;
   padding: 10px 30px 60px;
   max-width: 1180px;
   margin: 0 auto;
 }
+
+/* Flat text links, no pill, no border -- just the word and a hover shift. */
+.footer-link {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+.footer-link:hover { color: var(--ink); }
+.footer-link.danger:hover { color: var(--ember); }
 
 /* ── Responsive ───────────────────────────────────────────────── */
 
@@ -1176,8 +1361,6 @@ button:active { transform: translateY(1px); }
   .hero { height: 72vh; min-height: 440px; }
   .hero-mark .wordmark { font-size: 22px; }
   .hero-mark .wordmark em { font-size: 28px; }
-  .topbar { padding: 16px; gap: 16px; }
-  .goal-field input { min-width: 200px; }
   .layout, .footer { padding-left: 16px; padding-right: 16px; }
   .sheet-actions button { flex: 1 1 100%; }
 }

@@ -11,6 +11,9 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
+    <!-- Used only by downloadSheetPdf() (script.js) to wrap the engraved
+         sheet as a one-click PDF. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   </head>
   <body>
     <!-- Grain, over the whole page -->
@@ -24,14 +27,6 @@
 
       <div class="hero-chrome">
         <div class="hero-row">
-          <button
-            class="menu-link"
-            onclick="document.querySelector('.layout').scrollIntoView({behavior:'smooth'})"
-          >
-            <span class="menu-rule" aria-hidden="true"></span>
-            Menu
-          </button>
-
           <div class="hero-mark">
             <p class="wordmark"><em>Perigee</em></p>
             <p class="hero-goal" id="heroGoal">— log a day to begin —</p>
@@ -39,162 +34,171 @@
             <p class="hero-coords" id="heroCoords"></p>
           </div>
         </div>
-
-        <div
-          class="hotspot action play-hotspot"
-          title="Play the song"
-          onclick="playSong()"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </div>
-        <div class="compass" aria-hidden="true">
-          <span class="compass-needle"></span>
-        </div>
       </div>
 
-      <!-- Goal/date controls + subtask management, scaled down and folded
-           into the first screen instead of living below the fold. -->
-      <div class="hero-panel">
-        <header class="topbar">
-          <div class="goal-field">
-            <label for="goalName">Goal</label>
-            <input
-              id="goalName"
-              type="text"
-              placeholder="Build a robot"
-              oninput="setGoalName(this.value)"
-            />
-          </div>
-          <div class="day-field">
-            <label for="dateInput">Date</label>
-            <input
-              id="dateInput"
-              type="date"
-              oninput="setCurrentDate(this.value)"
-            />
-            <button class="ghost" onclick="goToToday()">Today</button>
-          </div>
-        </header>
-
-        <section class="card" id="subtasksCard">
-          <h2>Subtasks</h2>
-
-          <div class="add-row">
-            <div class="add-field">
-              <label class="mini-label" for="subtaskName">Subtask name</label>
-              <input
-                id="subtaskName"
-                type="text"
-                placeholder="e.g. CAD the robot"
-              />
+      <!-- Goal/date controls + subtask management + play button, scaled
+           down and tucked behind the bookmark tab instead of always
+           sitting on top of the scene. -->
+      <div class="hero-drawer" id="heroDrawer">
+        <div class="hero-panel">
+          <section class="card" id="subtasksCard">
+            <div class="card-head">
+              <div class="goal-field">
+                <h2>Goal</h2>
+                <input
+                  id="goalName"
+                  type="text"
+                  placeholder="Build a robot"
+                  oninput="setGoalName(this.value)"
+                />
+              </div>
+              <div class="day-field">
+                <label for="dateInput" class="sr-only">Date</label>
+                <input
+                  id="dateInput"
+                  type="date"
+                  oninput="setCurrentDate(this.value)"
+                />
+                <button
+                  class="icon-btn today"
+                  data-tip="Jump to today"
+                  aria-label="Jump to today"
+                  onclick="goToToday()"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="7" />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="1.4"
+                      fill="currentColor"
+                      stroke="none"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <button class="primary" onclick="uiAddSubtask()">Add subtask</button>
-          </div>
 
-          <ul id="subtaskList" class="subtask-list"></ul>
-          <div id="subtaskEmpty" class="empty">
-            No subtasks yet — add the first one above.
-          </div>
-        </section>
+            <h2>Subtasks</h2>
+
+            <div class="add-row">
+              <div class="add-field">
+                <input
+                  id="subtaskName"
+                  type="text"
+                  placeholder="e.g. CAD the robot"
+                />
+              </div>
+              <button class="primary" onclick="uiAddSubtask()">Add</button>
+            </div>
+
+            <ul id="subtaskList" class="subtask-list"></ul>
+            <div id="subtaskEmpty" class="empty">
+              No subtasks yet — add the first one above.
+            </div>
+          </section>
+
+          <!-- ── Daily check-in ─────────────────────────────────── -->
+          <section class="card" id="checkinCard">
+            <h2>Daily check-in</h2>
+
+            <label class="field-label label-primary" for="logTask">Subtask</label>
+            <select id="logTask" class="select"></select>
+
+            <label class="field-label label-secondary" for="effortSlider"
+              >Effort
+              <span id="effortReadout" class="effort-readout">1.0h</span></label
+            >
+            <!-- The slider's value IS the hours logged -- it drives note
+                 density directly, so there's nothing left to explain in prose. -->
+            <div class="effort-control">
+              <input
+                type="range"
+                id="effortSlider"
+                class="effort-slider"
+                min="0.5"
+                max="12"
+                step="0.5"
+                value="1"
+                oninput="setEffortHours(this.value)"
+              />
+              <div class="effort-ticks" aria-hidden="true">
+                <span class="effort-tick" style="left: 0%">0.5h</span>
+                <span class="effort-tick" style="left: 30.4%">4h</span>
+                <span class="effort-tick" style="left: 100%">12h</span>
+              </div>
+            </div>
+
+            <label class="field-label label-secondary" id="moodLabel">Mood</label>
+            <!-- Color is the signal -- see renderMoodGrid() in script.js. -->
+            <div class="mood-arc" id="moodGrid"></div>
+
+            <button class="primary wide" onclick="submitDailyLog()">
+              Submit
+            </button>
+            <div id="checkinMsg" class="msg"></div>
+          </section>
+        </div>
+
+        <!-- Bookmark tab -- fused to the drawer's top-right corner so it
+             moves as one rigid piece with the panel, not a separate part
+             floating near the edge. Clicking it toggles .hero-drawer.open
+             (toggleHeroDrawer(), script.js). -->
+        <button
+          id="bookmarkTab"
+          class="bookmark-tab"
+          type="button"
+          aria-expanded="false"
+          aria-controls="heroDrawer"
+          aria-label="Open panel"
+          onclick="toggleHeroDrawer()"
+        >
+          <span class="menu-rule" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <!-- Independent of the bookmark drawer -- always visible, doesn't
+           slide with it. -->
+      <div
+        id="playHotspot"
+        class="hotspot action play-hotspot"
+        data-tip="Play the song"
+        aria-label="Play the song"
+        onclick="togglePlay()"
+      >
+        <svg
+          id="playIcon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
       </div>
     </section>
 
     <main class="layout">
-      <!-- ── Daily check-in ───────────────────────────────────── -->
-      <section class="card" id="checkinCard">
-        <h2>Today's check-in</h2>
+      <!-- Daily check-in now lives in the hero panel, under the menu
+           button, at the same width as Goal/Date/Subtasks. -->
 
-        <label class="field-label label-primary" for="logTask">Subtask</label>
-        <select id="logTask" class="select"></select>
+      <!-- Timeline card ("Day timeline") was pulled out of this page --
+           renderTimeline() is untouched in script.js, just not called
+           against DOM elements that no longer exist here. -->
 
-        <label class="field-label label-secondary" for="effortSlider"
-          >Effort <span id="effortReadout" class="effort-readout">1.0h</span></label
-        >
-        <!-- The slider's value IS the hours logged -- it drives note density
-             directly, so there's nothing left to explain in prose. -->
-        <div class="effort-control">
-          <input
-            type="range"
-            id="effortSlider"
-            class="effort-slider"
-            min="0.5"
-            max="4"
-            step="0.1"
-            value="1"
-            oninput="setEffortHours(this.value)"
-          />
-          <div class="effort-ticks" aria-hidden="true">
-            <span class="effort-tick" style="left:0%">0.5h</span>
-            <span class="effort-tick" style="left:14.3%">1h</span>
-            <span class="effort-tick" style="left:57.1%">2.5h</span>
-            <span class="effort-tick" style="left:100%">4h</span>
-          </div>
-        </div>
-
-        <label class="field-label label-secondary" id="moodLabel">Mood</label>
-        <!-- Color is the signal -- see renderMoodGrid() in script.js. -->
-        <div class="mood-arc" id="moodGrid"></div>
-
-        <button class="primary wide" onclick="submitDailyLog()">
-          Submit today's log
-        </button>
-        <div id="checkinMsg" class="msg"></div>
-      </section>
-
-      <!-- ── Timeline ─────────────────────────────────────────── -->
-      <section class="card" id="timelineCard">
-        <h2>Day timeline</h2>
-        <div id="timeline" class="timeline"></div>
-        <div id="timelineEmpty" class="empty">Nothing logged yet.</div>
-      </section>
-
-      <!-- ── Song ─────────────────────────────────────────────── -->
-      <section class="card" id="songCard">
-        <h2>The song</h2>
-        <p class="hint" id="songState">Log a day to start writing the song.</p>
-
-        <div class="play-row">
-          <button id="playBtn" class="primary" onclick="playSong()">
-            ▶ Play song
-          </button>
-          <button class="ghost" onclick="stopSong()">■ Stop</button>
-        </div>
-      </section>
-
-      <!-- ── The sheet ────────────────────────────────────────── -->
-      <section class="card idle" id="sheetCard">
-        <h2>The sheet</h2>
-
-        <div id="sheetMeta" class="sheet-meta"></div>
-
-        <div id="sheetPaper" class="sheet-paper"></div>
-        <div id="sheetEmpty" class="empty">
-          Nothing engraved yet — log a day and the staff fills in.
-        </div>
-
-        <div class="sheet-actions" id="sheetActions">
-          <button class="primary" onclick="downloadSheet('musicxml')">
-            ⤓ MusicXML — for MuseScore
-          </button>
-          <button class="ghost" onclick="downloadSheet('midi')">⤓ MIDI</button>
-          <button class="ghost" onclick="downloadSheet('svg')">
-            ⤓ Engraved sheet (SVG)
-          </button>
-          <button class="ghost" onclick="downloadSheet('lyrics')">
-            ⤓ Lyrics
-          </button>
-        </div>
-        <div id="sheetMsg" class="msg"></div>
-      </section>
+      <!-- Song card ("The song") and sheet card ("The sheet") were pulled
+           out of this page -- the logic (renderSong/renderSheet, engrave,
+           downloadSheet, etc.) is untouched in script.js, just not called
+           against DOM elements that no longer exist here. -->
     </main>
 
     <footer class="footer">
-      <button class="ghost small" onclick="loadDemo()">Load demo goal</button>
-      <button class="ghost small danger" onclick="resetAll()">
-        Reset everything
-      </button>
+      <button class="footer-link" onclick="loadDemo()">Demo</button>
+      <button class="footer-link danger" onclick="resetAll()">Reset</button>
     </footer>
 
     <!-- ── The reward ─────────────────────────────────────────────
@@ -243,6 +247,70 @@
             ⤓ Sheet
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- ── The player — a full-screen listening view ─────────────────
+       Opens when the hero play button is pressed (togglePlay() ->
+       openPlayer(), script.js). The lavender moon spins in place
+       (window.startPlayerMoon, orbit-scene.js) while notes fly out
+       around it, timed to the music. The diary toggle surfaces each
+       movement's phrase, word by word, as its notes play. -->
+    <div class="player-overlay" id="playerOverlay" hidden>
+      <button
+        class="player-close"
+        data-tip="Close"
+        aria-label="Close"
+        onclick="closePlayer()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+
+      <button
+        id="diaryToggle"
+        class="player-diary-toggle"
+        data-tip="Open the diary"
+        aria-label="Open the diary"
+        aria-pressed="false"
+        onclick="toggleDiary()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z" />
+          <path d="M20 5.5C20 4.7 19.3 4 18.5 4H12v16h6.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" />
+        </svg>
+      </button>
+
+      <button
+        class="player-pdf-btn"
+        data-tip="Download sheet as PDF"
+        aria-label="Download sheet as PDF"
+        onclick="downloadSheetPdf()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5" />
+          <path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" />
+        </svg>
+      </button>
+
+      <div class="player-stage">
+        <div class="player-staff" aria-hidden="true">
+          <span class="player-ring r1"></span>
+          <span class="player-ring r2"></span>
+          <span class="player-ring r3"></span>
+          <span class="player-ring r4"></span>
+          <span class="player-ring r5"></span>
+        </div>
+        <canvas id="playerMoonCanvas"></canvas>
+        <div class="player-notes" id="playerNotes" aria-hidden="true"></div>
+      </div>
+
+      <p class="player-diary" id="playerDiary" aria-live="polite"></p>
+
+      <div class="player-meta">
+        <p class="player-title" id="playerTitle"></p>
+        <p class="player-sub" id="playerSub"></p>
       </div>
     </div>
 
