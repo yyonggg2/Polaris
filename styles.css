@@ -76,7 +76,11 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   background: var(--plum);
+  /* A small teal ring+dot instead of the default arrow -- same circular-
+     marker language as the .hotspot points scattered over the hero. */
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8.5' fill='none' stroke='%236f9d97' stroke-width='1.6' opacity='0.9'/%3E%3Ccircle cx='12' cy='12' r='2.2' fill='%23f1e7dd'/%3E%3C/svg%3E") 12 12, auto;
 }
+
 
 /* ── Film grain — over everything, quiet and constant ───────── */
 
@@ -118,6 +122,14 @@ body {
   flex-direction: column;
   justify-content: space-between;
   pointer-events: none;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Panel open (toggleHeroDrawer(), script.js) -- the wordmark/goal/subtask
+   readout slides right and out past the hero's own overflow:hidden edge,
+   giving the drawer and the now bird's-eye orbit view the room. */
+.hero.panel-open .hero-chrome {
+  transform: translateX(280px);
 }
 
 .hero-chrome a,
@@ -303,7 +315,14 @@ body {
   bottom: 26px;
   width: 214px;
   transform: translateX(-192px);
-  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Old curve (0.4,0,0.2,1) eases in slowly -- at 17% of the duration it's
+     only 8% of the way there, which reads as a stall right when you
+     click. This one moves immediately and decelerates into place. */
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Without this, the very first transform transition on this element
+     pays a one-time cost to promote it to its own compositor layer,
+     which shows up as a stall on exactly the first click. */
+  will-change: transform;
   pointer-events: none;
 }
 
@@ -1193,218 +1212,8 @@ button:active {
   cursor: not-allowed;
 }
 
-/* ── The reward ───────────────────────────────────────────────── */
-
 [hidden] {
   display: none !important;
-}
-
-.reward-overlay {
-  --rarity: var(--aurora);
-}
-.reward-overlay.rare {
-  --rarity: var(--cyan);
-}
-.reward-overlay.epic {
-  --rarity: #9a86b0;
-}
-.reward-overlay.legendary {
-  --rarity: var(--star);
-}
-.reward-overlay.given_up {
-  --rarity: var(--ember);
-}
-.reward-overlay.finale {
-  --rarity: var(--star);
-}
-
-.reward-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--void) 88%, transparent);
-  opacity: 0;
-  transition: opacity 0.24s ease;
-}
-
-.reward-overlay.open {
-  opacity: 1;
-}
-
-.reward-rays,
-.reward-burst,
-.rw-spark {
-  display: none;
-} /* flat design: no spinning rays / sparkle burst */
-
-.reward-card {
-  position: relative;
-  width: min(440px, 100%);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  text-align: center;
-  padding: 32px 28px 24px;
-  border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, var(--rarity) 45%, var(--edge-soft));
-  background: var(--plum-2);
-  transform: translateY(10px);
-  opacity: 0;
-  transition:
-    transform 0.28s ease,
-    opacity 0.24s ease;
-}
-
-.reward-overlay.open .reward-card {
-  transform: none;
-  opacity: 1;
-}
-
-.reward-sheen {
-  display: none;
-}
-
-.reward-ribbon {
-  display: inline-block;
-  font-family: var(--font);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  padding: 6px 18px;
-  border-radius: var(--pill);
-  color: var(--void);
-  background: var(--rarity);
-}
-
-.reward-rarity {
-  margin-top: 12px;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--rarity);
-}
-
-.reward-token {
-  position: relative;
-  width: 100px;
-  height: 100px;
-  margin: 14px auto 4px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent);
-}
-
-.rw-gem,
-.rw-ring,
-.rw-glyph {
-  position: absolute;
-}
-
-.rw-gem {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--rarity) 22%, var(--plum-2));
-}
-
-.rw-ring {
-  display: none;
-}
-
-.rw-glyph {
-  font-family: var(--font);
-  font-size: 36px;
-  line-height: 1;
-  color: var(--ink);
-}
-
-.reward-card h3 {
-  margin: 8px 0 4px;
-  font-family: var(--font);
-  font-size: 25px;
-  font-weight: 640;
-}
-
-.reward-sub {
-  margin: 0 0 18px;
-  font-size: 13px;
-  color: var(--ink-dim);
-}
-
-.reward-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  gap: 8px;
-  margin: 0 0 16px;
-  padding: 14px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--edge-soft);
-  background: var(--paper);
-}
-
-.rw-stat {
-  min-width: 0;
-}
-
-.rw-stat dt {
-  font-family: var(--font);
-  font-size: 9.5px;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  margin-bottom: 3px;
-}
-
-.rw-stat dd {
-  margin: 0;
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.reward-flavor {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-style: italic;
-  color: var(--ink-dim);
-  font-family: var(--font-score);
-}
-
-.reward-turned {
-  margin: 0 0 8px;
-  font-size: 11px;
-  color: var(--nova);
-}
-
-.reward-finale {
-  margin: 14px 0 4px;
-  padding: 12px 14px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--ink-dim);
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--star) 40%, transparent);
-  background: color-mix(in srgb, var(--star) 8%, transparent);
-}
-
-.reward-finale strong {
-  color: var(--star);
-}
-
-.reward-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 9px;
-  margin-top: 18px;
 }
 
 /* ── The player — full-screen listening view ─────────────────────
@@ -1421,16 +1230,63 @@ button:active {
   justify-content: center;
   gap: 22px;
   padding: 24px;
+  /* A thin haze near the moon, not a filled disc -- most of this should
+     read as open, empty space with the stars showing through it. Blended
+     toward var(--void) itself rather than transparent: this sits over
+     the main hero scene (position:fixed, but that scene's canvas still
+     paints directly behind it), so any real alpha here let it bleed
+     through solid and undimmed. */
   background: radial-gradient(
     circle at 50% 42%,
-    color-mix(in srgb, var(--plum-2) 92%, transparent) 0%,
-    var(--void) 74%
+    color-mix(in srgb, var(--plum-2) 42%, var(--void)) 0%,
+    var(--void) 70%
   );
   opacity: 0;
   transform: scale(0.92);
   transition:
     opacity 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
     transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* A quiet scatter of stars -- shared by the player and the page behind
+   it. seedStars() in script.js populates both with the same .star-dot
+   spans; only the container differs. */
+.player-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Behind the whole page (index content below the hero) -- the hero's
+   own opaque background sits on top of this wherever it overlaps, so
+   this only actually shows through in the footer / empty areas. */
+.page-stars {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.star-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: var(--o, 0.5);
+  animation: star-twinkle var(--dur, 4s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: var(--o, 0.5); }
+  50%      { opacity: calc(var(--o, 0.5) * 0.25); }
+}
+
+.player-close, .player-diary-toggle, .player-pdf-btn, .player-stage, .player-diary, .player-meta {
+  position: relative;
+  z-index: 1;
 }
 
 .player-overlay.open {
@@ -1581,19 +1437,33 @@ button:active {
 }
 
 .player-diary {
-  min-height: 1.5em;
+  min-height: 2.6em;
   max-width: min(560px, 84vw);
   margin: 0;
   text-align: center;
-  font-family: var(--font);
-  font-style: italic;
-  font-size: 17px;
-  color: var(--ink-dim);
   opacity: 0;
   transform: translateY(6px);
   transition:
     opacity 0.5s ease,
     transform 0.5s ease;
+}
+
+.player-diary .diary-date {
+  display: block;
+  font-family: var(--font);
+  font-size: 10.5px;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.player-diary .diary-line {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-dim);
 }
 
 .player-diary.show {
@@ -1674,4 +1544,22 @@ button:active {
   * {
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Cursor, interactive state ────────────────────────────────────
+   Last in the file on purpose -- several earlier rules set their own
+   cursor: pointer, and this needs to win over all of them. Filled dot
+   instead of the hollow ring on anything clickable, so "pressable"
+   reads differently from "just pointing at". */
+button,
+a,
+[role="button"],
+input[type="date"]::-webkit-calendar-picker-indicator,
+.mood-point,
+.icon-btn,
+.bookmark-tab,
+.subtask,
+select,
+label[for] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8.5' fill='none' stroke='%236f9d97' stroke-width='1.6' opacity='0.95'/%3E%3Ccircle cx='12' cy='12' r='4.6' fill='%236f9d97'/%3E%3C/svg%3E") 12 12, pointer;
 }

@@ -13,8 +13,33 @@ const hero = document.querySelector(".hero");
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-camera.position.set(0, 2.6, 9.5);
-camera.lookAt(0, 0, 0);
+
+// Two camera positions: the normal low, close-in angle, and a bird's-eye
+// pull-back that reads the orbit ring as a clear loop instead of edge-on.
+// window.setHeroOverview() (called from toggleHeroDrawer(), script.js)
+// switches the target the camera eases toward each frame.
+const CAMERA_NORMAL = new THREE.Vector3(0, 2.6, 9.5);
+const CAMERA_OVERVIEW = new THREE.Vector3(0, 10.5, 4.2);
+const cameraTarget = CAMERA_NORMAL.clone();
+
+// Same size, just shifted -- the panel opens over the left side of the
+// scene, so in overview the camera looks at a point left of true centre,
+// which pushes the whole rendered Earth+track to the right on screen,
+// clear of the panel, without shrinking anything.
+const LOOK_NORMAL = new THREE.Vector3(0, 0, 0);
+const LOOK_OVERVIEW = new THREE.Vector3(-2.6, 0, 0);
+const lookTarget = LOOK_NORMAL.clone();
+let overviewOn = false;
+
+camera.position.copy(CAMERA_NORMAL);
+camera.lookAt(LOOK_NORMAL);
+
+window.setHeroOverview = function (on) {
+  overviewOn = on;
+  cameraTarget.copy(on ? CAMERA_OVERVIEW : CAMERA_NORMAL);
+  trackPoints.visible = on;
+  stepMarkers.visible = on;
+};
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -83,7 +108,7 @@ function loadEquirectangular(url) {
   });
 }
 
-const earthTex = await loadEquirectangular("equirectangular.jpg");
+const earthTex = await loadEquirectangular("assets/equirectangular.jpg");
 
 function sampleEarthTexture(x, y, z) {
   // (x,y,z) is a point on the unit sphere -> latitude/longitude -> image UV.
@@ -160,6 +185,76 @@ const ringPoints = new THREE.Points(
 );
 scene.add(ringPoints);
 
+// The overview freeze's stop point isn't wherever the ambient spin
+// happens to be -- it's a fixed position along a fixed arc, divided into
+// as many steps as there are subtasks. Zero completed sits at the start
+// of the arc; each completion moves one step toward the end. Adding or
+// removing subtasks just redivides the same arc, so the step size
+// changes but the arc itself doesn't.
+// Swept across the far half of the circle (angle in [π, 2π], sin(angle)
+// <= 0) so the moon's Z stays behind the origin from the overview
+// camera's point of view -- the other half pushes Z past the camera's
+// own position and off the edge of the frustum, invisible.
+const FROZEN_START_ANGLE = Math.PI;
+const FROZEN_SWEEP = Math.PI;
+
+// ── Overview track — the arc the frozen moon actually stands on,
+// divided into one step per subtask. A dense trail traces the curve
+// (radius shrinks with angle here, same as the moon's own position, so
+// it's a spiral, not a flat circle); bright markers sit at each step so
+// the division itself reads clearly, not just the path. Both only show
+// up in overview -- see window.setHeroOverview() below. ────────────────
+function radiusForFrac(frac) {
+  return APOGEE_RADIUS - (APOGEE_RADIUS - PERIGEE_RADIUS) * frac;
+}
+
+const trackGeo = new THREE.BufferGeometry();
+const trackPoints = new THREE.Points(
+  trackGeo,
+  new THREE.PointsMaterial({ color: "#8fb8b0", size: 0.045, transparent: true, opacity: 0.75 }),
+);
+trackPoints.visible = false;
+scene.add(trackPoints);
+
+const stepGeo = new THREE.BufferGeometry();
+const stepMarkers = new THREE.Points(
+  stepGeo,
+  new THREE.PointsMaterial({ color: "#f1e7dd", size: 0.11, transparent: true, opacity: 0.95 }),
+);
+stepMarkers.visible = false;
+scene.add(stepMarkers);
+
+const TRACK_TRAIL_SEGMENTS = 160;
+function buildOverviewTrack(total) {
+  if (!total) {
+    trackGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+    stepGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+    return;
+  }
+
+  const trail = new Float32Array(TRACK_TRAIL_SEGMENTS * 3);
+  for (let i = 0; i < TRACK_TRAIL_SEGMENTS; i++) {
+    const frac = i / (TRACK_TRAIL_SEGMENTS - 1);
+    const a = FROZEN_START_ANGLE + frac * FROZEN_SWEEP;
+    const r = radiusForFrac(frac);
+    trail[i * 3] = Math.cos(a) * r;
+    trail[i * 3 + 1] = 0;
+    trail[i * 3 + 2] = Math.sin(a) * r;
+  }
+  trackGeo.setAttribute("position", new THREE.BufferAttribute(trail, 3));
+
+  const steps = new Float32Array((total + 1) * 3);
+  for (let k = 0; k <= total; k++) {
+    const frac = k / total;
+    const a = FROZEN_START_ANGLE + frac * FROZEN_SWEEP;
+    const r = radiusForFrac(frac);
+    steps[k * 3] = Math.cos(a) * r;
+    steps[k * 3 + 1] = 0;
+    steps[k * 3 + 2] = Math.sin(a) * r;
+  }
+  stepGeo.setAttribute("position", new THREE.BufferAttribute(steps, 3));
+}
+
 // ── Starfield ────────────────────────────────────────────────────
 const STAR_COUNT = 420;
 const starPos = new Float32Array(STAR_COUNT * 3);
@@ -194,6 +289,11 @@ const heroSubtasks = document.getElementById("heroSubtasks");
 const heroCoords = document.getElementById("heroCoords");
 let orbitRadius = APOGEE_RADIUS;
 
+// The overview freeze reads its angle off these instead of the
+// free-running clock -- see tick() below.
+let progressCompleted = 0;
+let progressTotal = 0;
+
 function updateReadout() {
   const data = readGoalData();
   const subtasks = data && data.subtasks ? data.subtasks : [];
@@ -201,9 +301,12 @@ function updateReadout() {
   const completed = subtasks.filter((t) => t.status === "completed").length;
   const ratio = total ? completed / total : 0;
   orbitRadius = APOGEE_RADIUS - (APOGEE_RADIUS - PERIGEE_RADIUS) * ratio;
+  progressCompleted = completed;
+  progressTotal = total;
+  buildOverviewTrack(total);
 
   if (!total) {
-    heroGoal.textContent = "— log a day to begin —";
+    heroGoal.textContent = "log a day to begin";
     heroSubtasks.innerHTML = "";
     heroCoords.textContent = "";
     return;
@@ -218,19 +321,36 @@ function updateReadout() {
 updateReadout();
 setInterval(updateReadout, 1000);
 
+function frozenAngle() {
+  const frac = progressTotal ? progressCompleted / progressTotal : 0;
+  return FROZEN_START_ANGLE + frac * FROZEN_SWEEP;
+}
+
 // ── Animate ──────────────────────────────────────────────────────
 let angle = 0;
 function tick() {
-  angle += 0.0035;
-  moonGroup.position.set(
-    Math.cos(angle) * orbitRadius,
-    Math.sin(angle * 0.6) * 0.4,
-    Math.sin(angle) * orbitRadius,
-  );
-  earthPoints.rotation.y += 0.0009;
-  moonPoints.rotation.y += 0.0015;
+  // Overview mode (panel open) freezes both planets in place -- the
+  // point is to read the current orbit position clearly, not watch it
+  // keep moving. The starfield keeps drifting; it's just ambience.
+  if (!overviewOn) {
+    angle += 0.0035;
+    moonGroup.position.set(
+      Math.cos(angle) * orbitRadius,
+      Math.sin(angle * 0.6) * 0.4,
+      Math.sin(angle) * orbitRadius,
+    );
+    earthPoints.rotation.y += 0.0009;
+    moonPoints.rotation.y += 0.0015;
+  } else {
+    const a = frozenAngle();
+    moonGroup.position.set(Math.cos(a) * orbitRadius, 0, Math.sin(a) * orbitRadius);
+  }
   stars.rotation.y += 0.00065;
   stars.rotation.x += 0.00018;
+
+  camera.position.lerp(cameraTarget, 0.05);
+  lookTarget.lerp(overviewOn ? LOOK_OVERVIEW : LOOK_NORMAL, 0.05);
+  camera.lookAt(lookTarget);
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);

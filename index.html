@@ -16,6 +16,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   </head>
   <body>
+    <!-- Quiet star scatter behind the whole page -- same stars, same
+         generator (seedStars(), script.js) as the player overlay. Sits
+         behind everything (z-index: -1); the hero's own opaque
+         background covers it wherever the two overlap. -->
+    <div class="page-stars" id="pageStars" aria-hidden="true"></div>
+
     <!-- Grain, over the whole page -->
     <div class="grain" aria-hidden="true"></div>
 
@@ -29,7 +35,7 @@
         <div class="hero-row">
           <div class="hero-mark">
             <p class="wordmark"><em>Perigee</em></p>
-            <p class="hero-goal" id="heroGoal">— log a day to begin —</p>
+            <p class="hero-goal" id="heroGoal">log a day to begin</p>
             <ul class="hero-subtasks" id="heroSubtasks"></ul>
             <p class="hero-coords" id="heroCoords"></p>
           </div>
@@ -99,7 +105,7 @@
 
             <ul id="subtaskList" class="subtask-list"></ul>
             <div id="subtaskEmpty" class="empty">
-              No subtasks yet — add the first one above.
+              No subtasks yet. Add the first one above.
             </div>
           </section>
 
@@ -201,55 +207,6 @@
       <button class="footer-link danger" onclick="resetAll()">Reset</button>
     </footer>
 
-    <!-- ── The reward ─────────────────────────────────────────────
-       Fires when a movement closes. Everything inside is written by
-       celebrate() in script.js. -->
-    <div class="reward-overlay" id="rewardOverlay" hidden>
-      <div class="reward-rays" aria-hidden="true"></div>
-      <div class="reward-burst" id="rewardBurst" aria-hidden="true"></div>
-
-      <div
-        class="reward-card"
-        id="rewardCard"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rewardTitle"
-      >
-        <div class="reward-sheen" aria-hidden="true"></div>
-
-        <div class="reward-ribbon" id="rewardKicker">MOVEMENT COMPLETE</div>
-        <div class="reward-rarity" id="rewardRarity">Rare</div>
-
-        <div class="reward-token" aria-hidden="true">
-          <span class="rw-ring"></span>
-          <span class="rw-ring rw-ring-2"></span>
-          <span class="rw-gem"></span>
-          <span class="rw-glyph" id="rewardGlyph">♫</span>
-        </div>
-
-        <h3 id="rewardTitle">C Ionian</h3>
-        <p class="reward-sub" id="rewardSub"></p>
-
-        <dl class="reward-stats" id="rewardStats"></dl>
-
-        <p class="reward-flavor" id="rewardFlavor"></p>
-        <p class="reward-turned" id="rewardTurned" hidden></p>
-        <p class="reward-finale" id="rewardFinale" hidden></p>
-
-        <div class="reward-actions">
-          <button class="primary" id="rewardClaim" onclick="closeReward()">
-            Claim
-          </button>
-          <button class="ghost" onclick="replayRewardChime()">
-            ↻ Hear it again
-          </button>
-          <button class="ghost" onclick="downloadSheet('musicxml')">
-            ⤓ Sheet
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- ── The player — a full-screen listening view ─────────────────
        Opens when the hero play button is pressed (togglePlay() ->
        openPlayer(), script.js). The lavender moon spins in place
@@ -257,6 +214,8 @@
        around it, timed to the music. The diary toggle surfaces each
        movement's phrase, word by word, as its notes play. -->
     <div class="player-overlay" id="playerOverlay" hidden>
+      <div class="player-stars" id="playerStars" aria-hidden="true"></div>
+
       <button
         class="player-close"
         data-tip="Close"
@@ -271,9 +230,9 @@
       <button
         id="diaryToggle"
         class="player-diary-toggle"
-        data-tip="Open the diary"
-        aria-label="Open the diary"
-        aria-pressed="false"
+        data-tip="Close the diary"
+        aria-label="Close the diary"
+        aria-pressed="true"
         onclick="toggleDiary()"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

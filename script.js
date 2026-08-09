@@ -472,15 +472,38 @@ function togglePlay() {
 let playerVisualTimers = [];
 let lastDiaryKey = null;
 
+/** Seeds a quiet scatter of stars into any container, once -- purely
+ * decorative, so there's no reason to regenerate it after the first
+ * call. Shared by the player and the page behind it (see the two
+ * seedStars() calls near the bottom of this file and in openPlayer()). */
+function seedStars(containerId, count) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap || wrap.children.length) return;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('span');
+    s.className = 'star-dot';
+    const size = 1 + Math.random() * 1.6;
+    s.style.left = `${Math.random() * 100}%`;
+    s.style.top = `${Math.random() * 100}%`;
+    s.style.width = `${size}px`;
+    s.style.height = `${size}px`;
+    s.style.setProperty('--o', (0.25 + Math.random() * 0.55).toFixed(2));
+    s.style.setProperty('--dur', `${(3 + Math.random() * 4).toFixed(1)}s`);
+    s.style.setProperty('--delay', `${(Math.random() * 4).toFixed(1)}s`);
+    wrap.appendChild(s);
+  }
+}
+
 function openPlayer(goalData) {
   const score = composeScore(goalData || getFullGoalData());
   if (!score.melody.length) {
-    uiSongMessage('Nothing to play yet — log a day first.', true);
+    uiSongMessage('Nothing to play yet. Log a day first.', true);
     return;
   }
 
   stopSong();
   stopPlayerVisuals();
+  seedStars('playerStars', 90);
 
   document.getElementById('playerTitle').textContent = score.title;
   document.getElementById('playerSub').textContent = score.subtitle;
@@ -614,8 +637,10 @@ function spawnNoteVisual(ev) {
   if (!task || !log) return;
 
   const diary = document.getElementById('playerDiary');
-  diary.textContent = `${formatDay(ev.date)} — ${task.taskName} · ` +
-    `${MOOD_LABEL[log.mood]} · ${EFFORT_LABEL[effortBand(log)]}, ${log.hours}h`;
+  diary.innerHTML =
+    `<span class="diary-date">${escapeHtml(formatDay(ev.date))}</span>` +
+    `<span class="diary-line">${escapeHtml(task.taskName)} · ` +
+    `${escapeHtml(MOOD_LABEL[log.mood])} · ${escapeHtml(EFFORT_LABEL[effortBand(log)])}, ${log.hours}h</span>`;
   diary.classList.remove('show');
   void diary.offsetWidth; // restart the fade-in even if the text is changing mid-transition
   diary.classList.add('show');
@@ -626,9 +651,17 @@ function spawnNoteVisual(ev) {
 function toggleHeroDrawer() {
   const drawer = document.getElementById('heroDrawer');
   const tab = document.getElementById('bookmarkTab');
+  const hero = document.querySelector('.hero');
   const isOpen = drawer.classList.toggle('open');
   tab.setAttribute('aria-expanded', String(isOpen));
   tab.setAttribute('aria-label', isOpen ? 'Close panel' : 'Open panel');
+
+  // The wordmark/goal/subtask readout slides out of the way, and the
+  // camera eases into a bird's-eye angle (window.setHeroOverview,
+  // orbit-scene.js) so the orbit position reads clearly while the panel
+  // has the scene's attention.
+  hero.classList.toggle('panel-open', isOpen);
+  if (window.setHeroOverview) window.setHeroOverview(isOpen);
 }
 
 /**
@@ -639,7 +672,7 @@ function playSong(goalData) {
   const score = composeScore(goalData || getFullGoalData());
 
   if (!score.melody.length) {
-    uiSongMessage('Nothing to play yet — log a day first.', true);
+    uiSongMessage('Nothing to play yet. Log a day first.', true);
     return null;
   }
 
@@ -654,7 +687,7 @@ function playSong(goalData) {
   const shadow = score.movements.length - bright;
 
   uiSongMessage(
-    `Playing ${score.isFull ? 'the full suite' : 'the suite so far'} — ` +
+    `Playing ${score.isFull ? 'the full suite' : 'the suite so far'}: ` +
     `${score.movements.length} movement${score.movements.length === 1 ? '' : 's'}, ` +
     `${bright} bright / ${shadow} shadow, ` +
     `${score.dayCount} day${score.dayCount === 1 ? '' : 's'}, ` +
@@ -853,7 +886,7 @@ function composeScore(goalData) {
   return {
     title: data.goalName || 'Untitled goal',
     subtitle: dates.length
-      ? `${formatDay(dates[0])} — ${formatDay(dates[dates.length - 1])}`
+      ? `${formatDay(dates[0])} to ${formatDay(dates[dates.length - 1])}`
       : '',
     tempo,
     melody,
@@ -1643,12 +1676,11 @@ function engrave(score, opts) {
 
       if (mv) {
         keyFifths = mv.fifths;
-        out.push(`<text x="${x}" y="${top - 12}" fill="#8fb8b0" font-size="12.5" ` +
+        // Just the task name -- no mode-name jargon (Dorian, Phrygian, ...),
+        // and pushed further above the staff so it clears ledger lines /
+        // stems instead of overlapping them.
+        out.push(`<text x="${x}" y="${top - 22}" fill="#8fb8b0" font-size="12.5" ` +
                  `font-weight="600">${xmlEscape(mv.taskName)}</text>`);
-        out.push(`<text x="${x}" y="${top - 12}" dx="${
-                   Math.min(240, mv.taskName.length * 7 + 12)}" fill="#c9b8b3" ` +
-                 `font-size="11" font-style="italic">${
-                   xmlEscape(`${mv.tonicName} ${mv.modeName}`)}</text>`);
         x += drawKeySignature(out, x, top, keyFifths) + 10;
       }
 
@@ -1799,21 +1831,21 @@ function downloadBlob(blob, filename) {
 
 function downloadSheet(kind) {
   const score = currentScore || composeScore(getFullGoalData());
-  if (!score.melody.length) return uiSheetMessage('Log a day first — there is nothing to write down yet.', true);
+  if (!score.melody.length) return uiSheetMessage('Log a day first. There is nothing to write down yet.', true);
 
   const name = projectSlug();
 
   if (kind === 'musicxml') {
     downloadBlob(new Blob([toMusicXML(score)], { type: 'application/vnd.recordare.musicxml+xml' }),
                  `${name}.musicxml`);
-    uiSheetMessage(`Saved ${name}.musicxml — open it in MuseScore.`);
+    uiSheetMessage(`Saved ${name}.musicxml. Open it in MuseScore.`);
   } else if (kind === 'midi') {
     downloadBlob(new Blob([toMIDI(score)], { type: 'audio/midi' }), `${name}.mid`);
     uiSheetMessage(`Saved ${name}.mid.`);
   } else if (kind === 'svg') {
     downloadBlob(new Blob([engrave(score, { width: 1120 })], { type: 'image/svg+xml' }),
                  `${name}.svg`);
-    uiSheetMessage(`Saved ${name}.svg — the engraved sheet.`);
+    uiSheetMessage(`Saved ${name}.svg: the engraved sheet.`);
   } else if (kind === 'lyrics') {
     const text = `${score.title}\n${score.subtitle}\n\n${generateLyrics(null, score)}\n`;
     downloadBlob(new Blob([text], { type: 'text/plain' }), `${name}-lyrics.txt`);
@@ -1828,10 +1860,10 @@ function downloadSheet(kind) {
 function downloadSheetPdf() {
   const score = currentScore || composeScore(getFullGoalData());
   if (!score.melody.length) {
-    return uiSheetMessage('Log a day first — there is nothing to write down yet.', true);
+    return uiSheetMessage('Log a day first. There is nothing to write down yet.', true);
   }
   if (!window.jspdf) {
-    return uiSheetMessage('PDF export is still loading -- try again in a moment.', true);
+    return uiSheetMessage('PDF export is still loading. Try again in a moment.', true);
   }
 
   const svgUrl = URL.createObjectURL(
@@ -1899,19 +1931,19 @@ function renderSubtaskList() {
       actions.appendChild(iconActionButton('check', 'Finished', 'complete', () => {
         completeSubtask(task.taskId);
         render();
-        celebrate(task.taskId, 'completed');
+        playCompletionChime(task.taskId, 'completed');
       }));
       actions.appendChild(iconActionButton('cross', 'Give up', 'give-up', () => {
         giveUpSubtask(task.taskId);
         render();
-        celebrate(task.taskId, 'given_up');
+        playCompletionChime(task.taskId, 'given_up');
       }));
     } else {
       // Closed by mistake, or picked back up — either way, undo it.
       actions.appendChild(iconActionButton('reopen', 'Reopen', 'reopen', () => {
         reopenSubtask(task.taskId);
         render();
-        uiMessage(`"${task.taskName}" is active again — its logs were kept.`);
+        uiMessage(`"${task.taskName}" is active again. Its logs were kept.`);
       }));
     }
     actions.appendChild(iconActionButton('trash', 'Delete', 'delete', () => {
@@ -1980,7 +2012,7 @@ function submitDailyLog() {
   const task = findSubtask(taskId);
   const dayData = getDataForDay(state.currentDate);
   uiMessage(
-    `Logged ${formatDay(state.currentDate)} for "${task.taskName}" — ` +
+    `Logged ${formatDay(state.currentDate)} for "${task.taskName}": ` +
     `${dayData.isChord ? `${dayData.entries.length} subtasks that day, that's a chord` : 'a single note'}.`
   );
 
@@ -1996,158 +2028,19 @@ function submitDailyLog() {
   render();
 }
 
-/* ── The reward ────────────────────────────────────────────────
-   Closing a movement is the only moment in this app that's worth an
-   interruption, so it gets the full treatment: rays, a rarity, the
-   engraved card, a chime built from the mode you just earned. */
+/* ── The completion chime ─────────────────────────────────────
+   Closing a movement plays a chime built from the mode you just
+   earned -- no popup, just the sound. */
 
-const RARITIES = [
-  { key: 'legendary', at: 7.2, label: 'Legendary', glyph: '𝄞' },
-  { key: 'epic',      at: 5.2, label: 'Epic',      glyph: '♬' },
-  { key: 'rare',      at: 3.2, label: 'Rare',      glyph: '♫' },
-  { key: 'common',    at: -99, label: 'Common',    glyph: '♪' },
-];
-
-/**
- * How much this movement is worth. Time spent counts most, then how many
- * separate days it took, then how it felt — and finishing is worth a full
- * point over walking away, without wiping the rest of it out.
- */
-function rarityFor(task) {
-  const logs = task.dailyLogs;
-  const hours = logs.reduce((s, l) => s + l.hours, 0);
-  const immersed = logs.filter((l) => effortBand(l) === 'immersed').length;
-
-  const score =
-    Math.min(4, hours / 2.5) +
-    Math.min(3, logs.length * 0.5) +
-    (averageMood(logs) - 1) +
-    immersed * 0.4 +
-    (task.status === 'completed' ? 1 : -1);
-
-  return { ...RARITIES.find((r) => score >= r.at), score };
-}
-
-const FLAVOUR = {
-  completed_bright: 'It set up the tonic and then it went there. That is the whole feeling.',
-  completed_shadow: 'A minor movement that lands on a major chord. Old trick, still lands.',
-  given_up_bright:  'Everything pointed home and then the floor moved. It is still a chord.',
-  given_up_shadow:  'It stops without arriving. That is a real ending, just not a happy one.',
-  silent:           'Nothing was logged here, so it is written as a rest. Rests are notated too.',
-};
-
-function celebrate(taskId, status) {
-  const task = findSubtask(taskId);
-  if (!task) return;
-
-  const overlay = document.getElementById('rewardOverlay');
-  const card = document.getElementById('rewardCard');
+function playCompletionChime(taskId, status) {
   const mv = (currentScore ? currentScore.movements : []).find((m) => m.taskId === taskId);
   const finale = isGoalFinished();
-  const rarity = rarityFor(task);
 
-  const silent = !mv;
-  const family = mv ? mv.family : 'shadow';
-  const flavour = silent ? FLAVOUR.silent : FLAVOUR[`${status}_${family}`];
-
-  // Rarity lives on the overlay so the card, the gem and the flying
-  // notes all pick the same glow colour up off one custom property.
-  overlay.className = `reward-overlay ${rarity.key} ${status}${finale ? ' finale' : ''}`;
-  card.className = `reward-card ${rarity.key} ${status}${finale ? ' finale' : ''}`;
-
-  document.getElementById('rewardKicker').textContent = finale
-    ? 'THE SUITE IS FINISHED'
-    : status === 'completed' ? 'MOVEMENT COMPLETE' : 'MOVEMENT LEFT OPEN';
-
-  document.getElementById('rewardRarity').textContent = rarity.label;
-  document.getElementById('rewardGlyph').textContent = rarity.glyph;
-
-  document.getElementById('rewardTitle').textContent = silent
-    ? 'A movement of rest'
-    : `${mv.tonicName} ${mv.modeName}`;
-
-  document.getElementById('rewardSub').textContent = silent
-    ? task.taskName
-    : `${task.taskName} — ${mv.feel}`;
-
-  const hours = loggedHours(taskId);
-  const stats = [
-    ['Days marked', String(task.dailyLogs.length)],
-    ['Hours', hours.toFixed(1)],
-    ['Notes written', silent ? '0' : String(mv.noteCount)],
-    ['Cadence', silent ? 'none' : mv.cadence],
-    ['Colour', silent ? '—' : (family === 'shadow' ? 'shadow' : 'bright')],
-  ];
-  document.getElementById('rewardStats').innerHTML = stats
-    .map(([k, v]) => `<div class="rw-stat"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
-    .join('');
-
-  document.getElementById('rewardFlavor').textContent = flavour;
-
-  const note = document.getElementById('rewardTurned');
-  note.hidden = !(mv && mv.turned);
-  note.textContent = 'Every third movement is written in shadow on purpose — ' +
-                     'this one was turned even though the days were fine.';
-
-  const finaleBlock = document.getElementById('rewardFinale');
-  finaleBlock.hidden = !finale;
-  if (finale && currentScore) {
-    const bright = currentScore.movements.filter((m) => m.family === 'bright').length;
-    finaleBlock.innerHTML =
-      `<strong>${escapeHtml(currentScore.title)}</strong> is complete — ` +
-      `${currentScore.movements.length} movement${currentScore.movements.length === 1 ? '' : 's'}, ` +
-      `${bright} bright and ${currentScore.movements.length - bright} in shadow, ` +
-      `${currentScore.measureCount} measures. The sheet is ready to download.`;
+  if (!mv) {
+    playChime('silent', 'aeolian', 0);
+    return;
   }
-
-  burst(rarity.key);
-  overlay.hidden = false;
-  requestAnimationFrame(() => overlay.classList.add('open'));
-
-  rewardChime = silent
-    ? { kind: 'silent', key: 'aeolian', pc: 0 }
-    : {
-        kind: finale ? 'goal' : status,
-        key: mv.key,
-        pc: TONICS.find((t) => t.name === mv.tonicName).pc,
-      };
-  replayRewardChime();
-
-  document.getElementById('rewardClaim').focus();
-}
-
-let rewardChime = null;
-
-function replayRewardChime() {
-  if (rewardChime) playChime(rewardChime.kind, rewardChime.key, rewardChime.pc);
-}
-
-/** Note glyphs thrown outward from the middle of the card. */
-function burst(rarityKey) {
-  const wrap = document.getElementById('rewardBurst');
-  const glyphs = ['♪', '♫', '♬', '♩', '✦', '𝄞'];
-  const count = { legendary: 34, epic: 26, rare: 20, common: 14 }[rarityKey] || 16;
-
-  wrap.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-    const dist = 120 + Math.random() * 190;
-    const s = document.createElement('span');
-    s.className = 'rw-spark';
-    s.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
-    s.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
-    s.style.setProperty('--dy', `${Math.sin(angle) * dist - 40}px`);
-    s.style.setProperty('--rot', `${(Math.random() * 2 - 1) * 220}deg`);
-    s.style.setProperty('--delay', `${Math.random() * 0.22}s`);
-    s.style.fontSize = `${12 + Math.random() * 16}px`;
-    wrap.appendChild(s);
-  }
-}
-
-function closeReward() {
-  const overlay = document.getElementById('rewardOverlay');
-  overlay.classList.remove('open');
-  setTimeout(() => { overlay.hidden = true; }, 260);
+  playChime(finale ? 'goal' : status, mv.key, TONICS.find((t) => t.name === mv.tonicName).pc);
 }
 
 /* ── UI helpers ────────────────────────────────────────────── */
@@ -2268,7 +2161,7 @@ function renderSong() {
   }
 
   stateLine.textContent = finished
-    ? 'Every subtask is closed out — the movements are stitched into one suite.'
+    ? 'Every subtask is closed out. The movements are stitched into one suite.'
     : 'Still in progress. This plays what exists so far; the full suite arrives when every subtask is completed or given up.';
 }
 
@@ -2406,7 +2299,7 @@ function loadDemo() {
   document.getElementById('dateInput').value = state.currentDate;
   save();
   render();
-  uiMessage(`Demo loaded — ${formatDay(day(4))} has two subtasks, so it plays as a chord.`);
+  uiMessage(`Demo loaded: ${formatDay(day(4))} has two subtasks, so it plays as a chord.`);
 }
 
 function resetAll() {
@@ -2428,13 +2321,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!state.currentDate) state.currentDate = todayISO();
   document.getElementById('goalName').value = state.goalName;
   document.getElementById('dateInput').value = state.currentDate;
+  seedStars('pageStars', 70);
 
   document.getElementById('subtaskName').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') uiAddSubtask();
-  });
-
-  document.getElementById('rewardOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'rewardOverlay') closeReward();
   });
 
   document.getElementById('playerOverlay').addEventListener('click', (e) => {
@@ -2443,7 +2333,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!document.getElementById('rewardOverlay').hidden) closeReward();
     if (!document.getElementById('playerOverlay').hidden) closePlayer();
   });
 
