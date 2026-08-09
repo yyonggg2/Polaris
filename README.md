@@ -21,7 +21,8 @@ With these two inspirations, we came up with the idea of this website where your
 ![Toolbox & Orbit](screenshots/orbit.png)
 ![Music](screenshots/musicbox.png)
 ![MusicSheet](screenshots/musicsheet.png)
-![demo video](https://youtu.be/VuNpo-vNJlM)
+![demo](https://yyonggg2.github.io/Polaris/)
+![video](https://youtu.be/VuNpo-vNJlM)
 
 ## How it works
 
