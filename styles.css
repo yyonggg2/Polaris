@@ -11,45 +11,49 @@
 
 :root {
   /* Ground — muted plum, dark enough to hold particles and grain */
-  --void:   #15111a;
-  --plum:   #241d27;
+  --void: #15111a;
+  --plum: #241d27;
   --plum-2: #2c232a;
-  --paper:  #332830;
+  --paper: #332830;
 
   /* Flat surfaces — no blur, just a shade lighter than the ground */
-  --surface:   rgba(255, 246, 240, 0.04);
+  --surface: rgba(255, 246, 240, 0.04);
   --surface-2: rgba(255, 246, 240, 0.07);
-  --edge:      rgba(240, 226, 214, 0.16);
+  --edge: rgba(240, 226, 214, 0.16);
   --edge-soft: rgba(240, 226, 214, 0.09);
 
   /* Ink — warm, archival */
-  --ink:       #f1e7dd;
-  --ink-dim:   #c9b8b3;
+  --ink: #f1e7dd;
+  --ink-dim: #c9b8b3;
   --ink-faint: #8c7a78;
 
   /* Accents, kept from the old palette by name so nothing that reads
      these variables elsewhere breaks — values are the muted, naturalistic
      set from the point-cloud reference instead of neon. */
-  --cyan:      #6f9d97;   /* dusty teal — the one accent colour */
+  --cyan: #6f9d97; /* dusty teal — the one accent colour */
   --cyan-deep: #4c766f;
   --cyan-muted: #769692; /* same teal, saturation pulled down -- solid button fills */
-  --aurora:    var(--cyan);      /* completed / bright — same teal as buttons, no green */
-  --star:      #c9a15a;   /* muted gold — mood 4 / legendary */
-  --ember:     var(--ink-faint); /* given up / danger — grey, no red */
-  --nova:      #c98a94;   /* dusty pink — mood 1 */
+  --aurora: var(
+    --cyan
+  ); /* completed / bright — same teal as buttons, no green */
+  --star: #c9a15a; /* muted gold — mood 4 / legendary */
+  --ember: var(--ink-faint); /* given up / danger — grey, no red */
+  --nova: #c98a94; /* dusty pink — mood 1 */
 
-  --radius:    4px;
+  --radius: 4px;
   --radius-sm: 3px;
-  --pill:      999px;
+  --pill: 999px;
 
-  --font:       "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font: "Fraunces", "Iowan Old Style", Georgia, serif;
   --font-score: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
 
   --track-label: 0.12em;
   --track-tight: 0.04em;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 .sr-only {
   position: absolute;
@@ -116,7 +120,11 @@ body {
   pointer-events: none;
 }
 
-.hero-chrome a, .hero-chrome button, .hero-chrome .hotspot { pointer-events: auto; }
+.hero-chrome a,
+.hero-chrome button,
+.hero-chrome .hotspot {
+  pointer-events: auto;
+}
 
 .hero-row {
   display: flex;
@@ -128,7 +136,10 @@ body {
   width: 14px;
   height: 12px;
   background-image: repeating-linear-gradient(
-    to bottom, currentColor 0 1px, transparent 1px 3px);
+    to bottom,
+    currentColor 0 1px,
+    transparent 1px 3px
+  );
   opacity: 0.85;
 }
 
@@ -176,9 +187,17 @@ body {
   color: var(--ink-faint);
 }
 
-.hero-subtasks .status-completed { color: var(--aurora); }
-.hero-subtasks .status-given_up  { color: var(--ember); text-decoration: line-through; opacity: 0.75; }
-.hero-subtasks .status-active    { color: var(--ink); }
+.hero-subtasks .status-completed {
+  color: var(--aurora);
+}
+.hero-subtasks .status-given_up {
+  color: var(--ember);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+.hero-subtasks .status-active {
+  color: var(--ink);
+}
 
 .hero-coords {
   /* Hidden for now -- the "001/003 CLOSED · R=..." readout wasn't landing.
@@ -201,7 +220,10 @@ body {
   display: grid;
   place-items: center;
   cursor: default;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 /* [data-tip] (below) sets position:relative for its tooltip bubble to
@@ -210,9 +232,13 @@ body {
    the play button) into normal document flow instead of the scene. An
    absolutely-positioned element is just as valid an anchor, so pin it
    back down here with higher specificity. */
-.hotspot[data-tip] { position: absolute; }
+.hotspot[data-tip] {
+  position: absolute;
+}
 
-.hotspot.action { cursor: pointer; }
+.hotspot.action {
+  cursor: pointer;
+}
 
 .hotspot.action:hover,
 .hotspot.active {
@@ -221,7 +247,10 @@ body {
   color: var(--ink);
 }
 
-.hotspot svg { width: 16px; height: 16px; }
+.hotspot svg {
+  width: 16px;
+  height: 16px;
+}
 
 .hotspot-dots {
   width: 14px;
@@ -236,18 +265,28 @@ body {
   bottom: 26px;
   width: 56px;
   height: 56px;
-  transition: background 0.18s ease, border-color 0.18s ease,
-              color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-.play-hotspot svg { width: 20px; height: 20px; margin-left: 2px; }
+.play-hotspot svg {
+  width: 20px;
+  height: 20px;
+  margin-left: 2px;
+}
 
 .play-hotspot:hover {
   transform: scale(1.1);
   background: var(--cyan);
   border-color: var(--cyan);
   color: var(--void);
-  box-shadow: 0 0 0 1px var(--cyan), 0 8px 24px color-mix(in srgb, var(--cyan) 45%, transparent);
+  box-shadow:
+    0 0 0 1px var(--cyan),
+    0 8px 24px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 
 /* ── Hero drawer — goal/date + subtasks, with the bookmark tab fused to
@@ -282,7 +321,9 @@ body {
   transform-origin: top left;
 }
 
-.hero-drawer .hero-panel::-webkit-scrollbar { width: 0; }
+.hero-drawer .hero-panel::-webkit-scrollbar {
+  width: 0;
+}
 
 /* Bookmark tab — fused to the panel's top-right corner (a sibling laid
    over it, not nested inside its scroll box, so it isn't clipped when
@@ -291,7 +332,7 @@ body {
 .bookmark-tab {
   position: absolute;
   z-index: 5;
-  top: -16px;
+  top: 0px;
   left: 171px;
   width: 30px;
   height: 30px;
@@ -299,14 +340,16 @@ body {
   transform-origin: top left;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--plum-2) 94%, transparent);
+  background: color-mix(in srgb, var(--plum-2) 88%, transparent);
   border: 1px solid var(--edge-soft);
   border-bottom: none;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--ink-dim);
   cursor: pointer;
   padding: 0;
-  transition: background 0.16s ease, color 0.16s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
   pointer-events: auto; /* stays clickable even while .hero-drawer (its
     closed-state parent) is pointer-events:none */
 }
@@ -317,7 +360,9 @@ body {
   color: var(--cyan);
 }
 
-.hero-panel .card + .card { margin-top: 16px; }
+.hero-panel .card + .card {
+  margin-top: 16px;
+}
 
 .hero-panel .card {
   background: color-mix(in srgb, var(--plum-2) 88%, transparent);
@@ -335,7 +380,8 @@ body {
   border-bottom: 1px solid var(--edge-soft);
 }
 
-.goal-field, .day-field {
+.goal-field,
+.day-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -356,7 +402,9 @@ body {
   color: var(--ink-faint);
 }
 
-.day-field label { align-self: center; }
+.day-field label {
+  align-self: center;
+}
 
 .goal-field input {
   width: 100%;
@@ -376,7 +424,8 @@ body {
   text-align: right;
 }
 
-.day-field input:hover, .day-field input:focus {
+.day-field input:hover,
+.day-field input:focus {
   background: none;
   border: none;
 }
@@ -387,11 +436,14 @@ body {
   cursor: pointer;
 }
 
-.day-field input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+.day-field input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
 
 /* ── Inputs — flat ────────────────────────────────────────────── */
 
-input, select {
+input,
+select {
   background: var(--paper);
   border: 1px solid var(--edge-soft);
   border-radius: var(--radius-sm);
@@ -399,22 +451,35 @@ input, select {
   padding: 10px 14px;
   font-family: inherit;
   font-size: 14px;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
 }
 
-input:hover, select:hover { border-color: var(--edge); }
+input:hover,
+select:hover {
+  border-color: var(--edge);
+}
 
-input:focus, select:focus {
+input:focus,
+select:focus {
   outline: none;
   background: var(--plum-2);
   border-color: var(--cyan);
 }
 
-input::placeholder { color: var(--ink-faint); }
+input::placeholder {
+  color: var(--ink-faint);
+}
 
-.select { width: 100%; }
+.select {
+  width: 100%;
+}
 
-select option { background: var(--paper); color: var(--ink); }
+select option {
+  background: var(--paper);
+  color: var(--ink);
+}
 
 /* ── Buttons — flat pills, one accent colour, no gradients ───── */
 
@@ -427,10 +492,15 @@ button {
   border: 1px solid transparent;
   padding: 10px 18px;
   cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
 }
 
-button:active { transform: translateY(1px); }
+button:active {
+  transform: translateY(1px);
+}
 
 .primary {
   background: var(--cyan-muted);
@@ -439,7 +509,10 @@ button:active { transform: translateY(1px); }
   font-weight: 650;
 }
 
-.primary:hover { background: var(--cyan-deep); border-color: var(--cyan-deep); }
+.primary:hover {
+  background: var(--cyan-deep);
+  border-color: var(--cyan-deep);
+}
 
 .primary:disabled {
   background: var(--surface-2);
@@ -454,22 +527,47 @@ button:active { transform: translateY(1px); }
   color: var(--ink-dim);
 }
 
-.ghost:hover { border-color: var(--cyan); color: var(--ink); }
+.ghost:hover {
+  border-color: var(--cyan);
+  color: var(--ink);
+}
 
-.ghost.danger:hover { border-color: var(--ember); color: var(--ember); }
+.ghost.danger:hover {
+  border-color: var(--ember);
+  color: var(--ember);
+}
 
-.wide { width: 100%; margin-top: 18px; padding: 12px 18px; }
+.wide {
+  width: 100%;
+  margin-top: 18px;
+  padding: 12px 18px;
+}
 
 /* ── Mood faces (timeline only -- the check-in picker is .mood-arc,
    further down) ──────────────────────────────────────────────── */
 
-[data-mood="1"] { --mood: var(--nova); }
-[data-mood="2"] { --mood: var(--ink-faint); }
-[data-mood="3"] { --mood: var(--cyan); }
-[data-mood="4"] { --mood: var(--star); }
+[data-mood="1"] {
+  --mood: var(--nova);
+}
+[data-mood="2"] {
+  --mood: var(--ink-faint);
+}
+[data-mood="3"] {
+  --mood: var(--cyan);
+}
+[data-mood="4"] {
+  --mood: var(--star);
+}
 
-.mood-dot { color: var(--mood); display: inline-block; vertical-align: -6px; }
-.mood-dot .mood-face { width: 20px; height: 20px; }
+.mood-dot {
+  color: var(--mood);
+  display: inline-block;
+  vertical-align: -6px;
+}
+.mood-dot .mood-face {
+  width: 20px;
+  height: 20px;
+}
 
 .mood-face {
   width: 38px;
@@ -485,7 +583,10 @@ button:active { transform: translateY(1px); }
   stroke-width: 1.4;
 }
 
-.mf-shine { fill: #fff; opacity: 0.18; }
+.mf-shine {
+  fill: #fff;
+  opacity: 0.18;
+}
 
 .mf-ink {
   fill: none;
@@ -495,7 +596,10 @@ button:active { transform: translateY(1px); }
   stroke-linejoin: round;
 }
 
-.mf-spark { fill: currentColor; opacity: 0.85; }
+.mf-spark {
+  fill: currentColor;
+  opacity: 0.85;
+}
 
 /* ── Layout ───────────────────────────────────────────────────── */
 
@@ -515,7 +619,9 @@ button:active { transform: translateY(1px); }
   padding: 22px 24px 24px;
 }
 
-#songCard { grid-column: 1 / -1; }
+#songCard {
+  grid-column: 1 / -1;
+}
 
 .card h2 {
   margin: 0 0 5px;
@@ -578,7 +684,9 @@ button:active { transform: translateY(1px); }
   color: var(--cyan);
 }
 
-.msg.error { color: var(--ember); }
+.msg.error {
+  color: var(--ember);
+}
 
 /* ── Subtasks ─────────────────────────────────────────────────── */
 
@@ -596,7 +704,9 @@ button:active { transform: translateY(1px); }
   min-width: 0;
 }
 
-.add-field input { width: 100%; }
+.add-field input {
+  width: 100%;
+}
 
 .mini-label {
   padding-left: 2px;
@@ -628,13 +738,21 @@ button:active { transform: translateY(1px); }
   border: 1px solid var(--edge-soft);
   border-radius: var(--radius-sm);
   padding: 13px 16px;
-  transition: border-color 0.18s ease, opacity 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    opacity 0.18s ease;
 }
 
-.subtask.current { border-color: var(--cyan); }
+.subtask.current {
+  border-color: var(--cyan);
+}
 
-.subtask.completed { opacity: 0.75; }
-.subtask.given_up  { opacity: 0.6; }
+.subtask.completed {
+  opacity: 0.75;
+}
+.subtask.given_up {
+  opacity: 0.6;
+}
 
 .subtask-head {
   display: flex;
@@ -643,7 +761,9 @@ button:active { transform: translateY(1px); }
   margin-bottom: 10px;
 }
 
-.subtask-name { font-weight: 600; }
+.subtask-name {
+  font-weight: 600;
+}
 
 .badge {
   font-family: var(--font);
@@ -671,7 +791,10 @@ button:active { transform: translateY(1px); }
   color: var(--cyan);
 }
 
-.badge-icon svg { width: 20px; height: 20px; }
+.badge-icon svg {
+  width: 20px;
+  height: 20px;
+}
 
 .subtask-actions {
   display: flex;
@@ -679,7 +802,10 @@ button:active { transform: translateY(1px); }
   flex-wrap: wrap;
 }
 
-.subtask-actions button { font-size: 11.5px; padding: 7px 12px; }
+.subtask-actions button {
+  font-size: 11.5px;
+  padding: 7px 12px;
+}
 
 /* Icon-only actions (finish / give up / delete) — a hover title carries
    the label instead of text, so the row stays quiet. */
@@ -695,18 +821,36 @@ button:active { transform: translateY(1px); }
   color: var(--ink-faint);
 }
 
-.icon-btn svg { width: 15px; height: 15px; }
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
 
-.icon-btn.complete:hover { background: color-mix(in srgb, var(--aurora) 16%, transparent); color: var(--aurora); }
-.icon-btn.give-up:hover { background: color-mix(in srgb, var(--ember) 16%, transparent); color: var(--ember); }
-.icon-btn.delete:hover { background: var(--surface-2); color: var(--ink-dim); }
-.icon-btn.reopen:hover, .icon-btn.today:hover { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan); }
+.icon-btn.complete:hover {
+  background: color-mix(in srgb, var(--aurora) 16%, transparent);
+  color: var(--aurora);
+}
+.icon-btn.give-up:hover {
+  background: color-mix(in srgb, var(--ember) 16%, transparent);
+  color: var(--ember);
+}
+.icon-btn.delete:hover {
+  background: var(--surface-2);
+  color: var(--ink-dim);
+}
+.icon-btn.reopen:hover,
+.icon-btn.today:hover {
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--cyan);
+}
 
 /* ── Fast tooltips ─────────────────────────────────────────────
    Native title="" has a slow, browser-controlled hover delay that
    can't be tuned. This is instant instead -- a couple frames, not
    a full second. */
-[data-tip] { position: relative; }
+[data-tip] {
+  position: relative;
+}
 
 [data-tip]::after {
   content: attr(data-tip);
@@ -726,7 +870,9 @@ button:active { transform: translateY(1px); }
   border-radius: var(--radius-sm);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.06s ease, transform 0.06s ease;
+  transition:
+    opacity 0.06s ease,
+    transform 0.06s ease;
   transition-delay: 0s;
   z-index: 60;
 }
@@ -786,7 +932,9 @@ button:active { transform: translateY(1px); }
   cursor: pointer;
 }
 
-.effort-slider:hover { background: var(--edge); }
+.effort-slider:hover {
+  background: var(--edge);
+}
 
 .effort-slider:focus {
   outline: none;
@@ -805,7 +953,9 @@ button:active { transform: translateY(1px); }
 }
 
 .effort-slider:active::-webkit-slider-thumb,
-.effort-slider:hover::-webkit-slider-thumb { transform: scale(1.25); }
+.effort-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
 
 .effort-slider::-moz-range-track {
   height: 2px;
@@ -838,8 +988,12 @@ button:active { transform: translateY(1px); }
   color: var(--ink-faint);
 }
 
-.effort-tick:first-child { transform: translateX(0); }
-.effort-tick:last-child { transform: translateX(-100%); }
+.effort-tick:first-child {
+  transform: translateX(0);
+}
+.effort-tick:last-child {
+  transform: translateX(-100%);
+}
 
 /* Mood: four dots along an arc that echoes the hero's orbit curve.
    Color carries the meaning; selection shows as a brightness lift plus
@@ -878,10 +1032,14 @@ button:active { transform: translateY(1px); }
   border-radius: 50%;
   background: var(--mood);
   opacity: 0.5;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
-.mood-point:hover { opacity: 0.8; }
+.mood-point:hover {
+  opacity: 0.8;
+}
 
 .mood-point.selected {
   opacity: 1;
@@ -911,9 +1069,16 @@ button:active { transform: translateY(1px); }
   padding-right: 4px;
 }
 
-.timeline::-webkit-scrollbar { width: 6px; }
-.timeline::-webkit-scrollbar-track { background: transparent; }
-.timeline::-webkit-scrollbar-thumb { background: var(--edge); border-radius: var(--pill); }
+.timeline::-webkit-scrollbar {
+  width: 6px;
+}
+.timeline::-webkit-scrollbar-track {
+  background: transparent;
+}
+.timeline::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: var(--pill);
+}
 
 .day-row {
   display: flex;
@@ -934,10 +1099,18 @@ button:active { transform: translateY(1px); }
   white-space: nowrap;
 }
 
-.day-entries { flex: 1; font-size: 13px; color: var(--ink-dim); }
+.day-entries {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
 
-.day-entries div { margin-bottom: 3px; }
-.day-entries div:last-child { margin-bottom: 0; }
+.day-entries div {
+  margin-bottom: 3px;
+}
+.day-entries div:last-child {
+  margin-bottom: 0;
+}
 
 .day-kind {
   font-family: var(--font);
@@ -949,17 +1122,28 @@ button:active { transform: translateY(1px); }
   color: var(--star);
 }
 
-.day-kind.note { color: var(--ink-faint); }
+.day-kind.note {
+  color: var(--ink-faint);
+}
 
 /* ── Song ─────────────────────────────────────────────────────── */
 
-.play-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.play-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
-#playBtn { padding: 12px 26px; font-size: 13px; }
+#playBtn {
+  padding: 12px 26px;
+  font-size: 13px;
+}
 
 /* ── The sheet ────────────────────────────────────────────────── */
 
-#sheetCard { grid-column: 1 / -1; }
+#sheetCard {
+  grid-column: 1 / -1;
+}
 
 .sheet-meta {
   font-family: var(--font);
@@ -986,7 +1170,9 @@ button:active { transform: translateY(1px); }
   background: var(--paper);
 }
 
-.sheet-paper:empty { display: none; }
+.sheet-paper:empty {
+  display: none;
+}
 
 .sheet-paper .engraving {
   display: block;
@@ -1002,18 +1188,35 @@ button:active { transform: translateY(1px); }
   margin-top: 18px;
 }
 
-.sheet-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.sheet-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ── The reward ───────────────────────────────────────────────── */
 
-[hidden] { display: none !important; }
+[hidden] {
+  display: none !important;
+}
 
-.reward-overlay           { --rarity: var(--aurora); }
-.reward-overlay.rare      { --rarity: var(--cyan); }
-.reward-overlay.epic      { --rarity: #9a86b0; }
-.reward-overlay.legendary { --rarity: var(--star); }
-.reward-overlay.given_up  { --rarity: var(--ember); }
-.reward-overlay.finale    { --rarity: var(--star); }
+.reward-overlay {
+  --rarity: var(--aurora);
+}
+.reward-overlay.rare {
+  --rarity: var(--cyan);
+}
+.reward-overlay.epic {
+  --rarity: #9a86b0;
+}
+.reward-overlay.legendary {
+  --rarity: var(--star);
+}
+.reward-overlay.given_up {
+  --rarity: var(--ember);
+}
+.reward-overlay.finale {
+  --rarity: var(--star);
+}
 
 .reward-overlay {
   position: fixed;
@@ -1028,11 +1231,15 @@ button:active { transform: translateY(1px); }
   transition: opacity 0.24s ease;
 }
 
-.reward-overlay.open { opacity: 1; }
+.reward-overlay.open {
+  opacity: 1;
+}
 
 .reward-rays,
 .reward-burst,
-.rw-spark { display: none; }   /* flat design: no spinning rays / sparkle burst */
+.rw-spark {
+  display: none;
+} /* flat design: no spinning rays / sparkle burst */
 
 .reward-card {
   position: relative;
@@ -1046,12 +1253,19 @@ button:active { transform: translateY(1px); }
   background: var(--plum-2);
   transform: translateY(10px);
   opacity: 0;
-  transition: transform 0.28s ease, opacity 0.24s ease;
+  transition:
+    transform 0.28s ease,
+    opacity 0.24s ease;
 }
 
-.reward-overlay.open .reward-card { transform: none; opacity: 1; }
+.reward-overlay.open .reward-card {
+  transform: none;
+  opacity: 1;
+}
 
-.reward-sheen { display: none; }
+.reward-sheen {
+  display: none;
+}
 
 .reward-ribbon {
   display: inline-block;
@@ -1086,7 +1300,11 @@ button:active { transform: translateY(1px); }
   border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent);
 }
 
-.rw-gem, .rw-ring, .rw-glyph { position: absolute; }
+.rw-gem,
+.rw-ring,
+.rw-glyph {
+  position: absolute;
+}
 
 .rw-gem {
   width: 70px;
@@ -1095,7 +1313,9 @@ button:active { transform: translateY(1px); }
   background: color-mix(in srgb, var(--rarity) 22%, var(--plum-2));
 }
 
-.rw-ring { display: none; }
+.rw-ring {
+  display: none;
+}
 
 .rw-glyph {
   font-family: var(--font);
@@ -1128,7 +1348,9 @@ button:active { transform: translateY(1px); }
   background: var(--paper);
 }
 
-.rw-stat { min-width: 0; }
+.rw-stat {
+  min-width: 0;
+}
 
 .rw-stat dt {
   font-family: var(--font);
@@ -1173,7 +1395,9 @@ button:active { transform: translateY(1px); }
   background: color-mix(in srgb, var(--star) 8%, transparent);
 }
 
-.reward-finale strong { color: var(--star); }
+.reward-finale strong {
+  color: var(--star);
+}
 
 .reward-actions {
   display: flex;
@@ -1197,15 +1421,22 @@ button:active { transform: translateY(1px); }
   justify-content: center;
   gap: 22px;
   padding: 24px;
-  background: radial-gradient(circle at 50% 42%,
-    color-mix(in srgb, var(--plum-2) 92%, transparent) 0%, var(--void) 74%);
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--plum-2) 92%, transparent) 0%,
+    var(--void) 74%
+  );
   opacity: 0;
   transform: scale(0.92);
-  transition: opacity 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
-              transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition:
+    opacity 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.player-overlay.open { opacity: 1; transform: scale(1); }
+.player-overlay.open {
+  opacity: 1;
+  transform: scale(1);
+}
 
 .player-close,
 .player-diary-toggle,
@@ -1222,14 +1453,27 @@ button:active { transform: translateY(1px); }
   color: var(--ink-dim);
   cursor: pointer;
   padding: 0;
-  transition: background 0.16s ease, color 0.16s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
 }
 
-.player-close svg, .player-diary-toggle svg, .player-pdf-btn svg { width: 17px; height: 17px; }
+.player-close svg,
+.player-diary-toggle svg,
+.player-pdf-btn svg {
+  width: 17px;
+  height: 17px;
+}
 
-.player-close { right: 26px; }
-.player-diary-toggle { left: 26px; }
-.player-pdf-btn { left: 74px; }
+.player-close {
+  right: 26px;
+}
+.player-diary-toggle {
+  left: 26px;
+}
+.player-pdf-btn {
+  left: 74px;
+}
 
 .player-close:hover,
 .player-diary-toggle:hover,
@@ -1247,7 +1491,10 @@ button:active { transform: translateY(1px); }
   place-items: center;
 }
 
-.player-staff { position: absolute; inset: 0; }
+.player-staff {
+  position: absolute;
+  inset: 0;
+}
 
 /* The five-line staff, bent into a ring around the moon instead of
    drawn flat -- it reads as sheet music without needing real notation. */
@@ -1258,13 +1505,36 @@ button:active { transform: translateY(1px); }
   border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
   border-radius: 50%;
   transform: translate(-50%, -50%);
+  transition: border-color 0.2s ease, box-shadow 0.3s ease;
 }
 
-.player-ring.r1 { width: 56%; height: 56%; }
-.player-ring.r2 { width: 68%; height: 68%; }
-.player-ring.r3 { width: 80%; height: 80%; }
-.player-ring.r4 { width: 92%; height: 92%; }
-.player-ring.r5 { width: 104%; height: 104%; }
+/* Lit from the inside out, one note at a time -- see pulseStaff() in
+   script.js, which staggers this class across r1..r5. */
+.player-ring.pulse {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 65%, transparent);
+}
+
+.player-ring.r1 {
+  width: 56%;
+  height: 56%;
+}
+.player-ring.r2 {
+  width: 68%;
+  height: 68%;
+}
+.player-ring.r3 {
+  width: 80%;
+  height: 80%;
+}
+.player-ring.r4 {
+  width: 92%;
+  height: 92%;
+}
+.player-ring.r5 {
+  width: 104%;
+  height: 104%;
+}
 
 #playerMoonCanvas {
   position: relative;
@@ -1284,8 +1554,9 @@ button:active { transform: translateY(1px); }
   position: absolute;
   top: 50%;
   left: 50%;
-  font-size: 15px;
-  color: var(--cyan);
+  font-size: 28px;
+  color: var(--ink);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--ink) 70%, transparent);
   transform: translate(-50%, -50%);
   animation: player-note-fly 1.05s ease-out forwards;
 }
@@ -1294,9 +1565,19 @@ button:active { transform: translateY(1px); }
    flies out from there, so it reads as thrown off the moon rather than
    spawned in mid-air. */
 @keyframes player-note-fly {
-  0%   { transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0.6); opacity: 0; }
-  15%  { opacity: 0.9; }
-  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity: 0; }
+  0% {
+    transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy)))
+      scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
+      scale(1);
+    opacity: 0;
+  }
 }
 
 .player-diary {
@@ -1310,12 +1591,19 @@ button:active { transform: translateY(1px); }
   color: var(--ink-dim);
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
 }
 
-.player-diary.show { opacity: 1; transform: translateY(0); }
+.player-diary.show {
+  opacity: 1;
+  transform: translateY(0);
+}
 
-.player-meta { text-align: center; }
+.player-meta {
+  text-align: center;
+}
 
 .player-title {
   margin: 0;
@@ -1352,19 +1640,38 @@ button:active { transform: translateY(1px); }
   color: var(--ink-faint);
 }
 
-.footer-link:hover { color: var(--ink); }
-.footer-link.danger:hover { color: var(--ember); }
+.footer-link:hover {
+  color: var(--ink);
+}
+.footer-link.danger:hover {
+  color: var(--ember);
+}
 
 /* ── Responsive ───────────────────────────────────────────────── */
 
 @media (max-width: 640px) {
-  .hero { height: 72vh; min-height: 440px; }
-  .hero-mark .wordmark { font-size: 22px; }
-  .hero-mark .wordmark em { font-size: 28px; }
-  .layout, .footer { padding-left: 16px; padding-right: 16px; }
-  .sheet-actions button { flex: 1 1 100%; }
+  .hero {
+    height: 72vh;
+    min-height: 440px;
+  }
+  .hero-mark .wordmark {
+    font-size: 22px;
+  }
+  .hero-mark .wordmark em {
+    font-size: 28px;
+  }
+  .layout,
+  .footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .sheet-actions button {
+    flex: 1 1 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.01ms !important; }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

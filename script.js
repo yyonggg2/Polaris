@@ -542,13 +542,47 @@ function stopPlayerVisuals() {
   playerVisualTimers = [];
 }
 
+// A generous ~3-octave window around the tonic (ROOT_MIDI=60) -- covers
+// the range composeScore() actually writes into without hard failing on
+// anything that lands outside it (clamped below).
+const PLAYER_PITCH_LOW = 45;
+const PLAYER_PITCH_HIGH = 90;
+
+/** 0 (lowest notes in range) .. 1 (highest) -- what ties a spark's
+ * launch direction and the staff's pulse reach back to the real pitch. */
+function pitchNorm(ev) {
+  const avg = ev.midis.reduce((s, m) => s + m, 0) / ev.midis.length;
+  return Math.min(1, Math.max(0, (avg - PLAYER_PITCH_LOW) / (PLAYER_PITCH_HIGH - PLAYER_PITCH_LOW)));
+}
+
+/** Rings light up from the centre outward, one note at a time -- how
+ * many of the five reach depends on how high the note actually is, so
+ * a low note barely stirs the middle while a high one runs the ring. */
+function pulseStaff(norm) {
+  const rings = document.querySelectorAll('.player-ring');
+  const reach = Math.max(1, Math.round(norm * rings.length));
+  rings.forEach((ring, i) => {
+    if (i >= reach) return;
+    setTimeout(() => {
+      ring.classList.remove('pulse');
+      void ring.offsetWidth; // restart the transition if it's still mid-fade
+      ring.classList.add('pulse');
+      setTimeout(() => ring.classList.remove('pulse'), 420);
+    }, i * 45);
+  });
+}
+
 function spawnNoteVisual(ev) {
+  const norm = pitchNorm(ev);
   const wrap = document.getElementById('playerNotes');
   if (wrap) {
     // Thrown from the moon's own surface, not from an arbitrary point in
-    // the middle of the stage -- the note reads as coming out of it.
+    // the middle of the stage -- the note reads as coming out of it. The
+    // launch direction leans up for high notes, down for low ones, so
+    // the throw itself carries the pitch, not just a random scatter.
     const moonRadius = wrap.getBoundingClientRect().width * 0.21;
-    const angle = Math.random() * Math.PI * 2;
+    const baseAngle = Math.PI / 2 - norm * Math.PI; // low -> down, high -> up
+    const angle = baseAngle + (Math.random() - 0.5) * 1.1;
     const dist = 60 + Math.random() * 90;
     const sx = Math.cos(angle) * moonRadius;
     const sy = Math.sin(angle) * moonRadius;
@@ -562,6 +596,8 @@ function spawnNoteVisual(ev) {
     wrap.appendChild(s);
     setTimeout(() => s.remove(), 1100);
   }
+
+  pulseStaff(norm);
 
   const diaryOn = document.getElementById('diaryToggle').getAttribute('aria-pressed') === 'true';
   if (!diaryOn) return;
