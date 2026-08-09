@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Music Module Test</title>
+  </head>
+  <body>
+    <h1>moodEffortToMeasure() testing station</h1>
+
+    <p>
+      <label for="testSelect">choose a combination:</label>
+      <select id="testSelect"></select>
+      <button id="playOneBtn">play this one</button>
+    </p>
+
+    <p>
+      <button id="playAllBtn">play all 16 combinations in order</button>
+    </p>
+
+    <p id="status">(the browser will ask for audio permission before the first button click)</p>
+
+    <script src="Tone.js"></script>
+    <script src="musicgeneration_test.js"></script>
+    <script>
+      // Cover all 16 combinations of mood(1-4) x effort(4 levels) so we can audition them one by one
+      const TEST_CASES = [];
+      for (let mood = 1; mood <= 4; mood++) {
+        for (const effort of ["barely", "a_little", "a_while", "immersed"]) {
+          TEST_CASES.push({ mood, effort });
+        }
+      }
+
+      // Shuffle the order to mimic real life, where mood/effort don't rise in a neat, predictable sequence
+      function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+      shuffle(TEST_CASES);
+
+      // Temporary test: no reverb/delay for now, all four voices go straight to output so we can hear the raw, unprocessed sound
+
+      // Limiter: no matter how many layers stack up, forces the final output to stay under a safe ceiling to prevent clipping/distortion
+      const limiter = new Tone.Limiter(-1).toDestination();
+
+      // Melody voice: sine wave pad
+      const synth = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.3, decay: 0.2, sustain: 0.5, release: 0.9 },
+      }).connect(limiter);
+
+      // Background drone: held on the fixed tonic C for the whole piece, threading everything together
+      const droneSynth = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 2, decay: 0, sustain: 1, release: 3 },
+        volume: -18,
+      }).connect(limiter);
+
+      // Bass: a root note that holds through the whole measure
+      const bassSynth = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.01, decay: 0.4, sustain: 0.3, release: 0.5 },
+        volume: 0,
+      }).connect(limiter);
+
+      // Drums: a fixed "heartbeat" pattern for the whole piece, unaffected by mood/effort, purely keeps the pulse
+      const drumSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.05,
+        octaves: 4,
+        envelope: { attack: 0.001, decay: 0.4, sustain: 0 },
+        volume: 5,
+      }).connect(limiter);
+
+      const statusEl = document.getElementById("status");
+      const selectEl = document.getElementById("testSelect");
+
+      // Populate the dropdown options
+      TEST_CASES.forEach((testCase, index) => {
+        const option = document.createElement("option");
+        option.value = index;
+        option.textContent = `mood=${testCase.mood}, effort=${testCase.effort}`;
+        selectEl.appendChild(option);
+      });
+
+      Tone.Transport.bpm.value = 90; // fixed tempo for the whole piece
+
+      // Expand a list of { mood, effort } combinations into note events with absolute timestamps.
+      // Two tracks: melodyEvents (follows the data) and bassEvents (fixed root hit at the start of each measure)
+      function buildEvents(sequence) {
+        const melodyEvents = [];
+        const bassEvents = [];
+        const drumEvents = [];
+        let cursor = 0; // seconds
+        for (const testCase of sequence) {
+          const notes = moodEffortToMeasure(testCase.mood, testCase.effort);
+          bassEvents.push({ time: cursor, note: "C2", duration: "1n" }); // holds through the whole measure (4 beats) instead of only half
+
+          // Heartbeat pattern: fixed hit on beat 1 (accented) and beat 3 (soft) of every measure, independent of the data
+          drumEvents.push({ time: cursor, velocity: 0.9 });
+          drumEvents.push({
+            time: cursor + Tone.Time("2n").toSeconds(),
+            velocity: 0.5,
+          });
+
+          for (const { note, duration, velocity } of notes) {
+            // note is null means a rest — don't schedule a sound, but the cursor still advances
+            if (note) {
+              melodyEvents.push({
+                time: cursor,
+                note,
+                duration,
+                velocity,
+                testCase,
+              });
+            }
+            cursor += Tone.Time(duration).toSeconds();
+          }
+          cursor += 0.15; // a little breathing room between measures
+        }
+        return { melodyEvents, bassEvents, drumEvents, totalDuration: cursor };
+      }
+
+      // Use Tone.Transport to schedule playback precisely, instead of manual setTimeout
+      function playSequence(sequence) {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+
+        const { melodyEvents, bassEvents, drumEvents, totalDuration } =
+          buildEvents(sequence);
+
+        const melodyPart = new Tone.Part((time, event) => {
+          // Legato (portamento): glide time is proportional to this note's own duration,
+          // low effort -> longer notes -> more noticeable glide; high effort -> shorter notes -> shorter glide
+          synth.portamento = Tone.Time(event.duration).toSeconds() * 0.2;
+          synth.triggerAttackRelease(
+            event.note,
+            event.duration,
+            time,
+            event.velocity,
+          );
+          Tone.Draw.schedule(() => {
+            statusEl.textContent = `mood=${event.testCase.mood}, effort=${event.testCase.effort} -> note=${event.note}`;
+          }, time);
+        }, melodyEvents).start(0);
+
+        // bass temporarily disabled too, to keep isolating which layer causes the noise
+        // const bassPart = new Tone.Part((time, event) => {
+        //   bassSynth.triggerAttackRelease(event.note, event.duration, time);
+        // }, bassEvents).start(0);
+
+        // drums temporarily disabled to A/B test without them
+        // const drumPart = new Tone.Part((time, event) => {
+        //   drumSynth.triggerAttackRelease("C1", "8n", time, event.velocity);
+        // }, drumEvents).start(0);
+
+        droneSynth.triggerAttack("C2", Tone.now());
+
+        Tone.Transport.scheduleOnce((time) => {
+          droneSynth.triggerRelease(time);
+          melodyPart.dispose();
+          Tone.Draw.schedule(() => {
+            statusEl.textContent = "Playback finished.";
+          }, time);
+        }, totalDuration);
+
+        Tone.Transport.start();
+      }
+
+      document
+        .getElementById("playOneBtn")
+        .addEventListener("click", async () => {
+          await Tone.start();
+          const testCase = TEST_CASES[Number(selectEl.value)];
+          playSequence([testCase]);
+        });
+
+      document
+        .getElementById("playAllBtn")
+        .addEventListener("click", async () => {
+          await Tone.start();
+          playSequence(TEST_CASES);
+        });
+    </script>
+  </body>
+</html>

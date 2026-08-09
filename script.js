@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   Polaris — every goal becomes a song.
+   Perigee — every goal becomes a song.
 
    Four layers, kept apart on purpose:
      LOGIC  — owns the data. Knows nothing about sound or the DOM.
@@ -82,7 +82,7 @@ function moodFace(score) {
     </svg>`;
 }
 
-const STORAGE_KEY = 'polaris.goal.v1';
+const STORAGE_KEY = 'perigee.goal.v1';
 
 let state = {
   goalName: '',
@@ -127,7 +127,7 @@ function formatDay(iso) {
   const d = fromISO(iso);
   const opts = { weekday: 'short', month: 'short', day: 'numeric' };
   if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-  return d.toLocaleDateString(undefined, opts);
+  return d.toLocaleDateString('en-US', opts);
 }
 
 /** Add a subtask. Returns the new taskId. */
@@ -1219,10 +1219,10 @@ function toMusicXML(score) {
     '<score-partwise version="3.1">\n' +
     `  <work><work-title>${xmlEscape(score.title)}</work-title></work>\n` +
     '  <identification>\n' +
-    '    <creator type="composer">Polaris</creator>\n' +
+    '    <creator type="composer">Perigee</creator>\n' +
     `    <creator type="lyricist">${xmlEscape(score.title)}</creator>\n` +
     `    <rights>${xmlEscape(score.subtitle)}</rights>\n` +
-    '    <encoding><software>Polaris</software>' +
+    '    <encoding><software>Perigee</software>' +
     `<encoding-date>${todayISO()}</encoding-date></encoding>\n` +
     '  </identification>\n' +
     '  <part-list>\n' +
@@ -1414,10 +1414,10 @@ function engrave(score, opts) {
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" ` +
            `width="${width}" height="${height}" class="engraving" ` +
            `font-family="Iowan Old Style, Palatino, Georgia, serif">`);
-  out.push(`<rect width="${width}" height="${height}" fill="#241a72"/>`);
-  out.push(`<text x="${pad}" y="34" fill="#ffffff" font-size="21" ` +
+  out.push(`<rect width="${width}" height="${height}" fill="#332830"/>`);
+  out.push(`<text x="${pad}" y="34" fill="#f1e7dd" font-size="21" ` +
            `font-style="italic">${xmlEscape(score.title)}</text>`);
-  out.push(`<text x="${width - pad}" y="34" fill="#b9aef6" font-size="12" ` +
+  out.push(`<text x="${width - pad}" y="34" fill="#c9b8b3" font-size="12" ` +
            `text-anchor="end">${xmlEscape(score.subtitle)} · ♩=${score.tempo}</text>`);
 
   let keyFifths = 0;
@@ -1446,10 +1446,10 @@ function engrave(score, opts) {
 
       if (mv) {
         keyFifths = mv.fifths;
-        out.push(`<text x="${x}" y="${top - 12}" fill="#8ee7ff" font-size="12.5" ` +
+        out.push(`<text x="${x}" y="${top - 12}" fill="#8fb8b0" font-size="12.5" ` +
                  `font-weight="600">${xmlEscape(mv.taskName)}</text>`);
         out.push(`<text x="${x}" y="${top - 12}" dx="${
-                   Math.min(240, mv.taskName.length * 7 + 12)}" fill="#c3b7ff" ` +
+                   Math.min(240, mv.taskName.length * 7 + 12)}" fill="#c9b8b3" ` +
                  `font-size="11" font-style="italic">${
                    xmlEscape(`${mv.tonicName} ${mv.modeName}`)}</text>`);
         x += drawKeySignature(out, x, top, keyFifths) + 10;
@@ -1484,7 +1484,7 @@ function engrave(score, opts) {
   });
 
   if (truncated) {
-    out.push(`<text x="${pad}" y="${height - 12}" fill="#9a90d4" font-size="12" ` +
+    out.push(`<text x="${pad}" y="${height - 12}" fill="#a99590" font-size="12" ` +
              `font-style="italic">…and ${truncated} more measure${truncated === 1 ? '' : 's'}. ` +
              `The download has all of them.</text>`);
   }
@@ -1558,7 +1558,7 @@ function drawNote(out, cx, top, item, fifths, alterMap) {
   }
 
   if (item.lyric) {
-    out.push(`<text x="${cx}" y="${top + 60}" fill="#e7e1ff" font-size="11.5" ` +
+    out.push(`<text x="${cx}" y="${top + 60}" fill="#e0d4cc" font-size="11.5" ` +
              `text-anchor="middle">${xmlEscape(item.lyric)}</text>`);
   }
 
@@ -1591,7 +1591,7 @@ function drawRest(out, cx, top, beats) {
 function projectSlug() {
   const base = (state.goalName || 'untitled-goal')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled-goal';
-  return `polaris-${base}-${todayISO()}`;
+  return `perigee-${base}-${todayISO()}`;
 }
 
 function downloadBlob(blob, filename) {
@@ -1670,12 +1670,12 @@ function renderSubtaskList() {
 
     const actions = li.querySelector('.subtask-actions');
     if (task.status === 'active') {
-      actions.appendChild(actionButton('Mark complete', 'ghost', () => {
+      actions.appendChild(iconActionButton('check', 'Finished', 'complete', () => {
         completeSubtask(task.taskId);
         render();
         celebrate(task.taskId, 'completed');
       }));
-      actions.appendChild(actionButton('Give up', 'ghost danger', () => {
+      actions.appendChild(iconActionButton('cross', 'Give up', 'give-up', () => {
         giveUpSubtask(task.taskId);
         render();
         celebrate(task.taskId, 'given_up');
@@ -1688,7 +1688,7 @@ function renderSubtaskList() {
         uiMessage(`"${task.taskName}" is active again — its logs were kept.`);
       }));
     }
-    actions.appendChild(actionButton('Delete', 'ghost danger small', () => {
+    actions.appendChild(iconActionButton('trash', 'Delete', 'delete', () => {
       if (confirm(`Delete "${task.taskName}" and its ${task.dailyLogs.length} log(s)?`)) {
         deleteSubtask(task.taskId);
         render();
@@ -1766,6 +1766,14 @@ function submitDailyLog() {
   );
 
   clearCheckin();
+
+  // Demo convenience: move the working date forward a day after every
+  // submit, so running through a demo doesn't require touching the date
+  // picker between entries.
+  state.currentDate = shiftISO(state.currentDate, 1);
+  document.getElementById('dateInput').value = state.currentDate;
+  save();
+
   render();
 }
 
@@ -2112,6 +2120,25 @@ function actionButton(label, className, onClick) {
   const btn = document.createElement('button');
   btn.className = className;
   btn.textContent = label;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+const ICON_PATHS = {
+  check: 'M5 13l4 4L19 7',
+  cross: 'M6 6l12 12M18 6L6 18',
+  trash: 'M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m2 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10Z',
+};
+
+/** A small round icon button — used where a text label would be too loud
+ * (mark complete / give up / delete). The hover title is the only label. */
+function iconActionButton(icon, title, className, onClick) {
+  const btn = document.createElement('button');
+  btn.className = `icon-btn ${className}`;
+  btn.title = title;
+  btn.setAttribute('aria-label', title);
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
+    `stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS[icon]}"/></svg>`;
   btn.addEventListener('click', onClick);
   return btn;
 }
